@@ -1,0 +1,62 @@
+import type { CalendarDate } from '../core/calendar';
+import type { ContactInfo } from '../core/contactInfo';
+import type { Library } from '../core/library';
+import type { PacketItem } from '../core/packet';
+import { DEFAULT_SIZE_PRESET, type SizePresetId } from '../core/sizePresets';
+
+export type ContactState =
+  | { readonly status: 'missing' }
+  | { readonly status: 'unreadable'; readonly reason: string }
+  | { readonly status: 'loaded'; readonly info: ContactInfo };
+
+export interface LoadedFolder {
+  readonly name: string;
+  readonly library: Library<File>;
+  readonly contact: ContactState;
+}
+
+export interface Notice {
+  readonly message: string;
+  readonly details: readonly string[];
+}
+
+export type BuildStatus =
+  | { readonly status: 'idle' }
+  | { readonly status: 'working'; readonly step: string }
+  | {
+      readonly status: 'done';
+      readonly fileName: string;
+      readonly pageCount: number;
+      readonly byteLength: number;
+      readonly largestInputs: readonly { readonly path: string; readonly byteLength: number }[];
+    }
+  | ({ readonly status: 'error' } & Notice);
+
+export interface AppState {
+  readonly today: CalendarDate;
+  readonly address: string;
+  readonly footer: string;
+  /** Once the footer is edited by hand it stops following the address. */
+  readonly footerEdited: boolean;
+  readonly folder: LoadedFolder | null;
+  readonly folderLoading: boolean;
+  readonly folderError: Notice | null;
+  readonly packet: readonly PacketItem[];
+  readonly sizePreset: SizePresetId;
+  readonly build: BuildStatus;
+}
+
+export function initialState(today: CalendarDate): AppState {
+  return {
+    today,
+    address: '',
+    footer: '',
+    footerEdited: false,
+    folder: null,
+    folderLoading: false,
+    folderError: null,
+    packet: [],
+    sizePreset: DEFAULT_SIZE_PRESET,
+    build: { status: 'idle' },
+  };
+}

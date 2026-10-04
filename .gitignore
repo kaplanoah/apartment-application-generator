@@ -1,0 +1,19 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+.DS_Store
+
+# Never commit real documents. Keep your own folder outside this repository.
+# Only the fake sample folder in example/ belongs here.
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.heif
+*.webp
+contact-info.txt
+!example/**
+!tests/fixtures/**
+!docs/**

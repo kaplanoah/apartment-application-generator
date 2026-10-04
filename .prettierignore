@@ -1,0 +1,5 @@
+dist/
+example/
+test-results/
+playwright-report/
+package-lock.json

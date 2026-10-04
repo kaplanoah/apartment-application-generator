@@ -1,0 +1,8 @@
+# Sample contact info. Replace with your own.
+Name: Noah Example
+Email: noah@example.com
+Phone: (555) 010-2481
+
+Name: Anna Example
+Email: anna@example.com
+Phone: (555) 010-7730
