@@ -200,13 +200,14 @@ The rules for changes, including the privacy guarantees, are in [AGENTS.md](AGEN
 Every change goes through a pull request. CI runs formatting, lint, types, dead-code
 detection, unit tests in three time zones, and browser tests in Chromium and WebKit side by
 side; the single `check` job passes only when all of them do. In the branch protection rule
-for `main`, require the `check` job and conversation resolution before merging.
+for `main`, require the `check` and `review` jobs and conversation resolution before merging.
 
 Pull requests are also reviewed by Claude for bugs, privacy and security issues, and rule
 violations. Its findings start with **Must fix** or **Should fix**. To turn that on in your
 copy, add a `CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`) repository secret; without
-one, the review step is skipped. The review only runs when `.github/workflows/ci.yml` matches
-`main`, so a pull request that changes it gets a "Not reviewed" comment instead.
+one, the review step is skipped. The review (`.github/workflows/review.yml`) only runs when
+that file matches `main`, so a pull request that changes it gets a "Not reviewed" comment
+instead.
 
 ### Releasing
 

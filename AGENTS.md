@@ -42,10 +42,10 @@ checks pull requests against them.
 
 1. Work on a branch and open a pull request; never push to `main` directly.
 2. Before pushing, run `npm run check` (format, lint, types, dead code, unit and browser tests).
-3. Merge only when the CI `check` job is green and review comments are resolved.
+3. Merge only when the CI `check` and `review` jobs are green and review comments are resolved.
 4. A change that alters the built file (`dist/index.html`), including a dependency upgrade,
    bumps `version` in `package.json`: patch for fixes and polish, minor for new features, major
    for breaking changes. CI's `version` check says whether yours does. Merging it publishes the
    release automatically.
-5. The Claude review can't run on a pull request that changes `.github/workflows/ci.yml`, and
-   says so on the pull request. Review those changes yourself.
+5. The Claude review can't run on a pull request that changes `.github/workflows/review.yml`,
+   and says so on the pull request. Review those changes yourself.
