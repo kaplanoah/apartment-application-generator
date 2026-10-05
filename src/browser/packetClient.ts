@@ -1,8 +1,10 @@
 import { UserFacingError } from '../core/errors';
 import type { BuiltPacket, PacketSection } from '../pdf/buildPacket';
 import type { CoverDetails } from '../pdf/cover';
+import type { JpegShrinker } from '../pdf/shrinkImages';
 import { isWorkerResponse, type ImageSizeLimits, type WorkerRequest, type WorkerResponse } from '../worker/protocol';
 import PacketWorker from '../worker/packetWorker?worker&inline';
+import { shrinkJpeg } from './imagePreparer';
 
 export type WorkerFactory = () => Worker;
 
@@ -17,11 +19,13 @@ export async function buildPacketInWorker(
   sections: readonly PacketSection[],
   onProgress: (done: number, total: number) => void,
   imageLimits: ImageSizeLimits | null = null,
+  shrinkImage: JpegShrinker = shrinkJpeg,
   createWorker: WorkerFactory = () => new PacketWorker(),
 ): Promise<BuiltPacket> {
   const worker = createWorker();
   try {
-    const seal = await request(worker, { type: 'check-seal' }, [], onProgress);
+    const listeners = { onProgress, shrinkImage };
+    const seal = await request(worker, { type: 'check-seal' }, [], listeners);
     if (seal.type !== 'seal-report' || seal.exposed.length > 0) {
       throw new UserFacingError(
         'Safety check failed: the PDF builder could reach the network, so nothing was built.',
@@ -29,7 +33,7 @@ export async function buildPacketInWorker(
       );
     }
     const transfer = sections.flatMap((section) => section.documents.map((doc) => doc.bytes.buffer as ArrayBuffer));
-    const result = await request(worker, { type: 'build', cover, sections, imageLimits }, transfer, onProgress);
+    const result = await request(worker, { type: 'build', cover, sections, imageLimits }, transfer, listeners);
     if (result.type !== 'done') throw new Error('Unexpected reply from the PDF builder.');
     return { bytes: result.bytes, pageCount: result.pageCount };
   } finally {
@@ -37,13 +41,18 @@ export async function buildPacketInWorker(
   }
 }
 
-/** Sends one request and resolves with the first non-progress reply. */
+interface Listeners {
+  readonly onProgress: (done: number, total: number) => void;
+  readonly shrinkImage: JpegShrinker;
+}
+
+/** Sends one request, answers progress and image requests, and resolves with the final reply. */
 function request(
   worker: Worker,
   message: WorkerRequest,
   transfer: Transferable[],
-  onProgress: (done: number, total: number) => void,
-): Promise<Exclude<WorkerResponse, { type: 'progress' | 'error' }>> {
+  { onProgress, shrinkImage }: Listeners,
+): Promise<Exclude<WorkerResponse, { type: 'progress' | 'error' | 'shrink-image' }>> {
   return new Promise((resolve, reject) => {
     worker.onmessage = (event: MessageEvent<unknown>) => {
       const reply = event.data;
@@ -51,6 +60,8 @@ function request(
         reject(new Error('The PDF builder sent an unexpected message.'));
       } else if (reply.type === 'progress') {
         onProgress(reply.done, reply.total);
+      } else if (reply.type === 'shrink-image') {
+        void answerShrink(worker, reply, shrinkImage);
       } else if (reply.type === 'error') {
         reject(
           reply.expected
@@ -67,4 +78,14 @@ function request(
     };
     worker.postMessage(message, transfer);
   });
+}
+
+async function answerShrink(
+  worker: Worker,
+  { id, jpeg, maxEdge, quality }: Extract<WorkerResponse, { type: 'shrink-image' }>,
+  shrinkImage: JpegShrinker,
+): Promise<void> {
+  const image = await shrinkImage(jpeg, maxEdge, quality).catch(() => null);
+  const reply: WorkerRequest = { type: 'shrunk-image', id, image };
+  worker.postMessage(reply, image ? [image.bytes.buffer as ArrayBuffer] : []);
 }

@@ -58,6 +58,13 @@ describe('worker messages', () => {
     expect(isWorkerResponse({ type: 'done', bytes: new Uint8Array(), pageCount: 3 })).toBe(true);
     expect(isWorkerResponse({ type: 'seal-report', exposed: [] })).toBe(true);
     expect(isWorkerResponse({ type: 'error', message: 'x', details: [], expected: true })).toBe(true);
+    expect(isWorkerResponse({ type: 'shrink-image', id: 1, jpeg: new Uint8Array(), maxEdge: 1600, quality: 0.8 })).toBe(
+      true,
+    );
+    expect(
+      isWorkerResponse({ type: 'shrink-image', id: 1.5, jpeg: new Uint8Array(), maxEdge: 1600, quality: 0.8 }),
+    ).toBe(false);
+    expect(isWorkerResponse({ type: 'shrink-image', id: 1, jpeg: 'x', maxEdge: 1600, quality: 0.8 })).toBe(false);
     for (const bad of [
       null,
       'done',

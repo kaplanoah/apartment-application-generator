@@ -1,7 +1,8 @@
 import { PDFArray, PDFDict, PDFName, PDFNumber, PDFRawStream, type PDFDocument, type PDFObject } from 'pdf-lib';
 import { readJpegOrientation } from './exif';
+import { sniffImageFormat } from './images';
 
-interface ShrunkImage {
+export interface ShrunkImage {
   readonly bytes: Uint8Array;
   readonly width: number;
   readonly height: number;
@@ -57,7 +58,7 @@ export async function shrinkPdfImages(pdf: PDFDocument, limits: ImageLimits): Pr
     if (readJpegOrientation(object.contents) !== 1) continue;
 
     const shrunk = await limits.shrink(object.contents, limits.maxEdge, limits.quality).catch(() => null);
-    if (!shrunk || shrunk.bytes.byteLength >= object.contents.byteLength) continue;
+    if (!isUsableReplacement(shrunk, object.contents.byteLength)) continue;
 
     const dict = object.dict.clone(pdf.context);
     dict.set(NAME.Width, PDFNumber.of(shrunk.width));
@@ -71,6 +72,17 @@ export async function shrinkPdfImages(pdf: PDFDocument, limits: ImageLimits): Pr
     saved += object.contents.byteLength - shrunk.bytes.byteLength;
   }
   return saved;
+}
+
+/** Only a real JPEG that's actually smaller may replace the original. */
+function isUsableReplacement(shrunk: ShrunkImage | null, originalLength: number): shrunk is ShrunkImage {
+  return (
+    shrunk !== null &&
+    shrunk.bytes.byteLength < originalLength &&
+    sniffImageFormat(shrunk.bytes) === 'jpg' &&
+    shrunk.width > 0 &&
+    shrunk.height > 0
+  );
 }
 
 function isPlainJpegImage(pdf: PDFDocument, dict: PDFDict): boolean {

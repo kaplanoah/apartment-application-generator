@@ -2,7 +2,7 @@ import { PDFDocument, PDFName, PDFNumber, PDFRawStream } from 'pdf-lib';
 import { describe, expect, it, vi } from 'vitest';
 import { buildPacket } from '../../src/pdf/buildPacket';
 import { shrinkPdfImages, type JpegShrinker } from '../../src/pdf/shrinkImages';
-import { sampleIdJpeg, withExifOrientation } from '../../scripts/lib/sampleDocs';
+import { sampleIdJpeg, samplePng, withExifOrientation } from '../../scripts/lib/sampleDocs';
 
 /** A PDF with one page showing the given JPEG (the sample ID is 1000×630). */
 async function pdfWithJpeg(jpeg: Uint8Array): Promise<Uint8Array> {
@@ -51,7 +51,7 @@ describe('shrinkPdfImages', () => {
     expect(shrink).not.toHaveBeenCalled();
   });
 
-  it('keeps the original if re-encoding would not make it smaller, or fails', async () => {
+  it('keeps the original if re-encoding fails or gives anything but a smaller JPEG', async () => {
     const doc = await PDFDocument.load(await pdfWithJpeg(sampleIdJpeg()));
     const bigger: JpegShrinker = async (jpeg) => ({
       bytes: new Uint8Array(jpeg.byteLength + 1),
@@ -59,6 +59,8 @@ describe('shrinkPdfImages', () => {
       height: 315,
     });
     expect(await shrinkPdfImages(doc, { maxEdge: 500, quality: 0.8, shrink: bigger })).toBe(0);
+    const notJpeg: JpegShrinker = async () => ({ bytes: samplePng(10, 10, [0, 0, 0]), width: 500, height: 315 });
+    expect(await shrinkPdfImages(doc, { maxEdge: 500, quality: 0.8, shrink: notJpeg })).toBe(0);
     const failing: JpegShrinker = async () => {
       throw new Error('decode failed');
     };
