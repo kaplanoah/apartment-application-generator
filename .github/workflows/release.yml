@@ -1,11 +1,13 @@
 name: Release
 
-# Push a tag like v1.0.0 to publish the app on the repository's Releases page:
-# the single HTML file, a zip with the fake example folder, and their SHA-256
-# checksums. The tag must match the version in package.json.
+# Publishes the app on the repository's Releases page: the single HTML file, a
+# zip with the fake example folder, and their SHA-256 checksums. Start it with
+# "Run workflow" on main (the version comes from package.json), or by pushing a
+# tag that matches package.json, like v1.0.0.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -20,8 +22,18 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - name: Check the tag matches package.json
-        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
+      - name: Work out the version
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match package.json ($version)."
+            exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" = branch ] && [ "$GITHUB_REF_NAME" != main ]; then
+            echo "::error::Releases are made from main, not $GITHUB_REF_NAME."
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm run lint && npm run typecheck && npm run deadcode && npm test
       - run: npm run build
@@ -36,5 +48,6 @@ jobs:
           cp -R "example/Apartment Docs" "Apartment Packet Builder/Example Apartment Docs"
           zip -qrX apartment-packet-builder.zip "Apartment Packet Builder"
           sha256sum apartment-packet-builder.html apartment-packet-builder.zip > SHA256SUMS
-          gh release create "$GITHUB_REF_NAME" apartment-packet-builder.html apartment-packet-builder.zip SHA256SUMS \
-            --title "$GITHUB_REF_NAME" --generate-notes
+          # Creates the tag at this commit if it doesn't exist; refuses a version already released.
+          gh release create "$VERSION" apartment-packet-builder.html apartment-packet-builder.zip SHA256SUMS \
+            --target "$GITHUB_SHA" --title "$VERSION" --generate-notes
