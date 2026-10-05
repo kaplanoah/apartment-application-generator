@@ -32,19 +32,19 @@ connects to the internet, and your documents are never transferred or stored. Se
 Download [`apartment-packet-builder.html`](https://github.com/kaplanoah/apartment-application-generator/releases/latest/download/apartment-packet-builder.html)
 from the [latest release](https://github.com/kaplanoah/apartment-application-generator/releases/latest) and keep it anywhere, such as your
 Documents folder. Want to try it first? `apartment-packet-builder.zip` on the same page
-also has the fake example folder.
+also has the fake example folder, `Apartment Docs`.
 
 ### 2. Set up your documents folder
 
 Keep it **outside** this project, for example `Documents/Apartment Docs`. Arrange it
-however makes sense to you. Here's one way:
+however makes sense to you. Here's part of the fake example folder, `example/Apartment Docs`:
 
 ```
 Apartment Docs/
 ├── contact-info.txt          ← names and contact details for the cover
 ├── Cover Letter.pdf          ← a top-level file is its own option
 ├── ID/
-│   ├── alex-license.jpg
+│   ├── alex-id.jpg
 │   └── jordan-passport.pdf
 ├── Pay Stubs/
 │   ├── Alex/
@@ -70,7 +70,7 @@ The rules:
 - **Subfolders are fine** (for example one per person). Their names don't matter. They're
   only shown as faint labels.
 - **One nesting level per folder.** A folder uses only the files at its deepest level. If
-  `Bank Statements/` has `Chase/2026-09.pdf` and also a loose `summary.pdf`, the loose
+  `Bank Statements/` has `Chase/2026-09.pdf` and also a loose `account-summary.pdf`, the loose
   one is left out, and the app tells you so.
 - **Supported files:** PDF, JPG, PNG, HEIC (iPhone photos; HEIC needs Safari) and plain
   text (`.txt`, laid out on letter pages). Hidden files like `.DS_Store` are ignored.
