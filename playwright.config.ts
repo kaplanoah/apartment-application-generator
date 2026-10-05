@@ -19,6 +19,9 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
+    // A stuck click or fill fails on its own, with a log of what it waited for, well before
+    // the test's timeout cuts it off without one.
+    actionTimeout: 10_000,
     acceptDownloads: true,
     trace: 'retain-on-failure',
     locale: 'en-US',

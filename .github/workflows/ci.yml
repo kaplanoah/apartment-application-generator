@@ -91,6 +91,10 @@ jobs:
           path: dist
       - run: npx playwright install --with-deps ${{ matrix.project == 'chromium' && '--only-shell chromium' || 'webkit' }}
       - run: npx playwright test --project=${{ matrix.project }}
+      # The page as each failed test last saw it, so a failure can be understood from the log.
+      - name: Show the page at each failure
+        if: failure()
+        run: find test-results -name error-context.md -exec sh -c 'echo "::group::$1"; cat "$1"; echo "::endgroup::"' _ {} \;
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: failure()
         with:
@@ -187,8 +191,9 @@ jobs:
             exit 1
           fi
 
-          tagged="$(gh api "repos/$GH_REPO/git/ref/tags/$version" --jq .object.sha 2> /dev/null || true)"
-          if [ -n "$tagged" ] && [ "$tagged" != "$GITHUB_SHA" ]; then
+          # gh fails when there's no such tag, which is the usual case.
+          if tagged="$(gh api "repos/$GH_REPO/git/ref/tags/$version" --jq .object.sha 2> /dev/null)" &&
+            [ "$tagged" != "$GITHUB_SHA" ]; then
             echo "::error::Tag $version already exists at $tagged, not at this commit. Delete the tag or bump the version."
             exit 1
           fi
