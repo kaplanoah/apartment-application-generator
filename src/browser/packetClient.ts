@@ -1,7 +1,7 @@
 import { UserFacingError } from '../core/errors';
 import type { BuiltPacket, PacketSection } from '../pdf/buildPacket';
 import type { CoverDetails } from '../pdf/cover';
-import { isWorkerResponse, type WorkerRequest, type WorkerResponse } from '../worker/protocol';
+import { isWorkerResponse, type ImageSizeLimits, type WorkerRequest, type WorkerResponse } from '../worker/protocol';
 import PacketWorker from '../worker/packetWorker?worker&inline';
 
 export type WorkerFactory = () => Worker;
@@ -16,6 +16,7 @@ export async function buildPacketInWorker(
   cover: CoverDetails,
   sections: readonly PacketSection[],
   onProgress: (done: number, total: number) => void,
+  imageLimits: ImageSizeLimits | null = null,
   createWorker: WorkerFactory = () => new PacketWorker(),
 ): Promise<BuiltPacket> {
   const worker = createWorker();
@@ -28,7 +29,7 @@ export async function buildPacketInWorker(
       );
     }
     const transfer = sections.flatMap((section) => section.documents.map((doc) => doc.bytes.buffer as ArrayBuffer));
-    const result = await request(worker, { type: 'build', cover, sections }, transfer, onProgress);
+    const result = await request(worker, { type: 'build', cover, sections, imageLimits }, transfer, onProgress);
     if (result.type !== 'done') throw new Error('Unexpected reply from the PDF builder.');
     return { bytes: result.bytes, pageCount: result.pageCount };
   } finally {

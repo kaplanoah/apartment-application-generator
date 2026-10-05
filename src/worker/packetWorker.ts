@@ -4,6 +4,7 @@ import './sealOnLoad';
 import { UserFacingError } from '../core/errors';
 import { buildPacket } from '../pdf/buildPacket';
 import type { WorkerRequest, WorkerResponse } from './protocol';
+import { shrinkJpegOffscreen } from './offscreenShrinker';
 import { exposedGlobals } from './seal';
 
 const scope = globalThis as unknown as DedicatedWorkerGlobalScope;
@@ -18,9 +19,10 @@ scope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   if (request.type !== 'build') return;
 
   try {
-    const packet = await buildPacket(request.cover, request.sections, (done, total) =>
-      reply({ type: 'progress', done, total }),
-    );
+    const packet = await buildPacket(request.cover, request.sections, {
+      onProgress: (done, total) => reply({ type: 'progress', done, total }),
+      imageLimits: request.imageLimits ? { ...request.imageLimits, shrink: shrinkJpegOffscreen } : undefined,
+    });
     reply({ type: 'done', bytes: packet.bytes, pageCount: packet.pageCount }, [packet.bytes.buffer as ArrayBuffer]);
   } catch (error) {
     const expected = error instanceof UserFacingError;

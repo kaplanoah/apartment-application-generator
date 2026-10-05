@@ -17,7 +17,7 @@ export const COVER = {
   /** The address is the largest text; without one, the title takes that size. */
   heroSize: 26,
   labelSize: 13,
-  metaSize: 9,
+  dateSize: 11,
   nameSize: 11,
   detailSize: 9.5,
   headingSize: 8,
@@ -43,13 +43,13 @@ export interface CoverLayoutInput {
   readonly entryCount: number;
 }
 
-export interface Positioned {
+interface Positioned {
   readonly page: number;
   readonly x: number;
   readonly y: number;
 }
 
-export interface SizedText extends Positioned {
+interface SizedText extends Positioned {
   readonly size: number;
 }
 
@@ -71,7 +71,7 @@ export interface CoverLayout {
 
 export function layoutCover(input: CoverLayoutInput): CoverLayout {
   const x = COVER.marginX;
-  const date = { page: 0, x: x + COVER.contentWidth, y: COVER.top - COVER.metaSize };
+  const date = { page: 0, x: x + COVER.contentWidth, y: COVER.top - COVER.dateSize };
 
   const titleSize = input.hasAddress ? COVER.labelSize : COVER.heroSize;
   let y = COVER.top - COVER.firstPageTopGap - titleSize;

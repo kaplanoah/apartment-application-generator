@@ -7,6 +7,7 @@ import { stampFooters } from './footer';
 import { fitImage, pageSizeForImage } from './geometry';
 import type { PreparedImage } from './images';
 import { addOutline, addPageLink } from './navigation';
+import { shrinkPdfImages, type ImageLimits } from './shrinkImages';
 import { makeTextSanitizer } from './text';
 import { drawTextPages, paginate, TEXT_LAYOUT, wrapText } from './textPages';
 
@@ -30,7 +31,13 @@ export interface BuiltPacket {
   readonly pageCount: number;
 }
 
-export type ProgressListener = (done: number, total: number) => void;
+type ProgressListener = (done: number, total: number) => void;
+
+export interface BuildOptions {
+  readonly onProgress?: ProgressListener;
+  /** Shrink oversized photos and scans inside PDFs to these limits; omit to keep them. */
+  readonly imageLimits?: ImageLimits;
+}
 
 const IMAGE_MARGIN = 36;
 const PRODUCER = 'Apartment Packet Builder';
@@ -57,7 +64,7 @@ interface Fonts {
 export async function buildPacket(
   cover: CoverDetails,
   sections: readonly PacketSection[],
-  onProgress: ProgressListener = () => {},
+  { onProgress = () => {}, imageLimits }: BuildOptions = {},
 ): Promise<BuiltPacket> {
   const total = sections.reduce((sum, section) => sum + section.documents.length, 0) + 1;
   let done = 0;
@@ -75,7 +82,7 @@ export async function buildPacket(
   for (const section of sections) {
     const list: LoadedDocument[] = [];
     for (const document of section.documents) {
-      const result = await loadDocument(document, fonts);
+      const result = await loadDocument(document, fonts, imageLimits);
       if (typeof result === 'string') problems.push(`${document.label}: ${result}`);
       else list.push(result);
       onProgress(++done, total);
@@ -142,7 +149,11 @@ export async function buildPacket(
 const pagesOf = (item: LoadedDocument): number =>
   item.kind === 'pdf' ? item.pageCount : item.kind === 'text' ? item.pages.length : 1;
 
-async function loadDocument(document: PacketDocument, fonts: Fonts): Promise<LoadedDocument | string> {
+async function loadDocument(
+  document: PacketDocument,
+  fonts: Fonts,
+  imageLimits: ImageLimits | undefined,
+): Promise<LoadedDocument | string> {
   if (document.kind === 'text') return loadText(document.bytes, fonts);
   if (document.kind === 'image') {
     if (!document.image) return 'the photo wasn’t prepared.';
@@ -160,7 +171,9 @@ async function loadDocument(document: PacketDocument, fonts: Fonts): Promise<Loa
     return 'it’s password-protected. Open it in Preview, choose File → Export as PDF, and use the exported copy.';
   }
   const pageCount = pdf.getPageCount();
-  return pageCount > 0 ? { kind: 'pdf', pdf, pageCount } : 'the PDF has no pages.';
+  if (pageCount === 0) return 'the PDF has no pages.';
+  if (imageLimits) await shrinkPdfImages(pdf, imageLimits);
+  return { kind: 'pdf', pdf, pageCount };
 }
 
 function loadText(bytes: Uint8Array, fonts: Fonts): LoadedDocument | string {

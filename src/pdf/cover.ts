@@ -26,7 +26,6 @@ export interface CoverFonts {
 }
 
 const INK = rgb(0.11, 0.13, 0.19);
-const MUTED = rgb(0.4, 0.44, 0.52);
 const LINE = rgb(0.85, 0.86, 0.89); // dot leaders
 
 export function planCover(details: CoverDetails, entryCount: number): CoverLayout {
@@ -71,7 +70,6 @@ export function drawCover(
       layout.title.size,
       regular,
       COVER.contentWidth,
-      MUTED,
     );
     write(
       first,
@@ -87,11 +85,11 @@ export function drawCover(
   }
   const month = sanitize(formatLongMonthYear(details.preparedOn));
   first.drawText(month, {
-    x: layout.date.x - regular.widthOfTextAtSize(month, COVER.metaSize),
+    x: layout.date.x - regular.widthOfTextAtSize(month, COVER.dateSize),
     y: layout.date.y,
-    size: COVER.metaSize,
+    size: COVER.dateSize,
     font: regular,
-    color: MUTED,
+    color: INK,
   });
 
   const columnWidth = layout.applicantColumnWidth - 12;
@@ -102,7 +100,7 @@ export function drawCover(
     write(page, applicant.name, spot.x, spot.y, COVER.nameSize, bold, columnWidth);
     applicant.details.forEach((detail, line) => {
       const y = spot.y - COVER.nameLeading - line * COVER.detailLeading + 2;
-      write(page, formatContactDetail(detail), spot.x, y, COVER.detailSize, regular, columnWidth, MUTED);
+      write(page, formatContactDetail(detail), spot.x, y, COVER.detailSize, regular, columnWidth);
     });
   });
 
@@ -115,7 +113,6 @@ export function drawCover(
       COVER.headingSize,
       bold,
       COVER.contentWidth,
-      MUTED,
     );
   });
 
@@ -123,13 +120,11 @@ export function drawCover(
   const entryRows = entries.map((entry, i) => {
     const spot = layout.entries[i] as (typeof layout.entries)[number];
     const page = pageAt(spot.page);
-    const number = String(i + 1).padStart(2, '0');
     const pageLabel = String(entry.pageNumber);
     const pageWidth = regular.widthOfTextAtSize(pageLabel, COVER.entrySize);
-    const textX = spot.x + 26;
+    const textX = spot.x;
     const available = right - pageWidth - 16 - textX;
 
-    page.drawText(number, { x: spot.x, y: spot.y, size: 10, font: regular, color: MUTED });
     const title = fitText(sanitize(entry.title), regular, COVER.entrySize, available);
     page.drawText(title, { x: textX, y: spot.y, size: COVER.entrySize, font: regular, color: INK });
     let textEnd = textX + regular.widthOfTextAtSize(title, COVER.entrySize);
@@ -138,7 +133,7 @@ export function drawCover(
       const room = right - pageWidth - 16 - (textEnd + 8);
       if (room > 40) {
         const note = fitText(`· ${sanitize(entry.description)}`, regular, COVER.noteSize, room);
-        page.drawText(note, { x: textEnd + 6, y: spot.y, size: COVER.noteSize, font: regular, color: MUTED });
+        page.drawText(note, { x: textEnd + 6, y: spot.y, size: COVER.noteSize, font: regular, color: INK });
         textEnd += 6 + regular.widthOfTextAtSize(note, COVER.noteSize);
       }
     }

@@ -35,6 +35,9 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
   );
   const summary = h('p', { class: 'hint', id: 'summary' });
   const result = h('div', { 'aria-live': 'polite' });
+  const progressBar = h('progress', { class: 'progress', max: 1, value: 0, 'aria-label': 'Progress' });
+  const progressLabel = h('span', { class: 'hint' });
+  const progressBlock = h('div', { class: 'progress-block' }, progressLabel, progressBar);
 
   const element = h(
     'section',
@@ -44,7 +47,7 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
     h(
       'p',
       { class: 'faint' },
-      'PDFs are always copied as they are, so their text stays sharp. Only photos are resized.',
+      'Text is never changed, so it stays sharp. Only photos and scanned images, including those inside PDFs, are resized.',
     ),
     h('div', { class: 'generate-row' }, summary, button),
     result,
@@ -71,7 +74,9 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
         replaceChildren(result);
         break;
       case 'working':
-        replaceChildren(result, h('p', { class: 'hint' }, build.step));
+        progressBar.value = build.progress;
+        progressLabel.textContent = build.label;
+        if (!result.contains(progressBlock)) replaceChildren(result, progressBlock);
         break;
       case 'error':
         replaceChildren(
@@ -101,7 +106,9 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
               h(
                 'p',
                 null,
-                `That’s large for email and many upload forms. Try “Smaller”, or shrink big scanned PDFs in Preview (File → Export → Quartz Filter: Reduce File Size). Largest files: ${build.largestInputs.map((input) => `${input.path} (${formatBytes(input.byteLength)})`).join(', ')}.`,
+                state.sizePreset === 'smaller'
+                  ? 'That’s large for email and many upload forms, which often stop around 10 MB. You may need to send it in two parts.'
+                  : 'That’s large for email and many upload forms. Choose “Smaller” and generate again.',
               ),
           ),
         );
@@ -113,7 +120,7 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
   return { element, update };
 }
 
-export function formatBytes(bytes: number): string {
+function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

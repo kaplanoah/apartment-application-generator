@@ -1,32 +1,241 @@
 name: CI
 
 on:
-  push:
-    branches: [main, master]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [master]
 
 permissions:
   contents: read
 
+# A new push to a pull request stops the checks still running on the one before it.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  check:
+  lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npm run format:check
-      - run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
       - run: npm run typecheck
+
+  deadcode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run deadcode
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
       - run: npm test
+      # The runner is on UTC. Date ranges depend on the viewer's day, so check far
+      # behind and far ahead of it too.
+      - name: Test in other time zones
+        run: TZ=Pacific/Honolulu npm test && TZ=Pacific/Kiritimati npm test
+
+  # The browser tests take most of CI's time, so each engine runs on its own machine.
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, webkit]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.project == 'chromium' && '--only-shell chromium' || 'webkit' }}
       - run: npm run build
-      - run: npx playwright install --with-deps chromium webkit
-      - run: npx playwright test
-      - uses: actions/upload-artifact@v4
+      - run: npx playwright test --project=${{ matrix.project }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: failure()
+        with:
+          name: playwright-report-${{ matrix.project }}
+          path: |
+            playwright-report/
+            test-results/
+
+  # The single built file, for trying a pull request's version without building it.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: apartment-packet-builder
           path: dist/index.html
+
+  # Reviews every push to a pull request, so fixes for its comments are reviewed too. It
+  # passes when there's nothing to review, such as a push to master, since check fails on
+  # a skipped job.
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    concurrency:
+      group: review-${{ github.event.pull_request.number || github.sha }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Decide whether to review
+        id: decision
+        env:
+          EVENT: ${{ github.event_name }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          reason=""
+          if [ "$EVENT" != "pull_request" ]; then
+            reason="only pull requests are reviewed"
+          elif [ "$IS_DRAFT" = "true" ]; then
+            reason="a draft is reviewed once it's ready for review"
+          elif [ "$AUTHOR" = "dependabot[bot]" ]; then
+            reason="Dependabot's pull requests aren't reviewed"
+          elif [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            reason="there's no CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY secret"
+          fi
+          if [ -n "$reason" ]; then
+            echo "::notice::Nothing was reviewed: $reason."
+            echo "review=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "review=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.decision.outputs.review == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          # Claude can read files, and the review needs no git credentials on disk.
+          persist-credentials: false
+
+      # A review that's still going at eight minutes has stalled, and it gets one more try.
+      - name: Review
+        id: review
+        if: steps.decision.outputs.review == 'true'
+        continue-on-error: true
+        timeout-minutes: 8
+        uses: anthropics/claude-code-action@fd1c128679612beff4ca259c78021c506e8aa7a7 # v1.0.237
+        with: &review-inputs
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
+          claude_args: |
+            --max-turns 60
+            --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments:*)"
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+            The PR branch is checked out in the working directory. Read the diff with `gh pr diff`,
+            and read any surrounding code you need to judge it. This app handles rental
+            applications: Social Security numbers, pay, bank statements and IDs.
+
+            Report only these four kinds of finding:
+
+            1. Bugs: logic errors, unhandled edge cases, and broken assumptions that would make the
+               code behave wrongly, including wrong pages, order, dates or ranges in the packet.
+            2. AGENTS.md violations: any rule in AGENTS.md that the changed lines break.
+            3. Security and privacy: any network access, browser storage, or other way data could
+               leave the page; text reaching the page as HTML; anything that weakens the
+               Content-Security-Policy, the sealed PDF worker or its startup check; new runtime
+               dependencies; and real personal data in code, samples, tests or docs.
+            4. Missing tests, with a high bar: flag this only when the PR changes behavior a user
+               would notice and the existing tests would still pass if that change were reverted.
+               Never ask for tests of refactors, renames, comments, docs, styling, or
+               configuration.
+
+            This may not be the first review of this PR. Read the comments already on it with
+            `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments --paginate`,
+            and never post a finding that is already there, whether it was fixed, answered, or left open.
+
+            Skip anything lint, Prettier, TypeScript, or knip already enforce, and anything that
+            is a matter of taste. Only report what you are confident is real; when unsure, leave
+            it out. Don't run the tests or other checks: this workflow's other jobs run them all,
+            and a failure there fails the PR without you.
+
+            Post each finding as an inline comment on the line it concerns, with confirmed=true.
+            Say what is wrong, when it goes wrong, and how to fix it, in a few sentences.
+            Don't post praise.
+
+            Last, leave one summary comment, which replaces the one from your previous review:
+            `gh pr comment ${{ github.event.pull_request.number }} --edit-last --create-if-none --body "<summary>"`.
+            Start it with "Claude reviewed ${{ github.event.pull_request.head.sha }}:", then say
+            how many findings you posted inline, or that you found none. If a tool you needed to
+            read the PR or its code wasn't allowed, name it and say what you couldn't check.
+
+      - name: Review again
+        if: steps.review.outcome == 'failure'
+        timeout-minutes: 8
+        uses: anthropics/claude-code-action@fd1c128679612beff4ca259c78021c506e8aa7a7 # v1.0.237
+        with: *review-inputs
+
+  # The one check to require before merging. It runs even when a job fails, because
+  # GitHub counts a skipped required check as passing.
+  check:
+    if: always()
+    needs: [lint, format, typecheck, deadcode, test, browser, build, review]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to pass
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1

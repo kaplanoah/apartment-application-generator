@@ -11,10 +11,20 @@ const LAPTOP = { width: 1440, height: 900 };
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  timeout: 30_000,
+  expect: { timeout: 5_000 },
+  retries: 0,
+  // Each test stands alone, so tests in one file run side by side too.
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
-  reporter: process.env.CI ? 'github' : 'list',
-  use: { acceptDownloads: true, trace: 'retain-on-failure' },
+  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
+  use: {
+    acceptDownloads: true,
+    trace: 'retain-on-failure',
+    locale: 'en-US',
+    timezoneId: 'America/New_York',
+    contextOptions: { reducedMotion: 'reduce' },
+  },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: LAPTOP } },
     ...(withWebKit ? [{ name: 'webkit', use: { ...devices['Desktop Safari'], viewport: LAPTOP } }] : []),

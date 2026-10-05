@@ -4,7 +4,18 @@ import type { PacketSection } from '../pdf/buildPacket';
 /** Messages between the page and the sealed PDF worker. */
 export type WorkerRequest =
   | { readonly type: 'check-seal' }
-  | { readonly type: 'build'; readonly cover: CoverDetails; readonly sections: readonly PacketSection[] };
+  | {
+      readonly type: 'build';
+      readonly cover: CoverDetails;
+      readonly sections: readonly PacketSection[];
+      /** Shrink photos and scans inside PDFs to this size, or keep them (null). */
+      readonly imageLimits: ImageSizeLimits | null;
+    };
+
+export interface ImageSizeLimits {
+  readonly maxEdge: number;
+  readonly quality: number;
+}
 
 export type WorkerResponse =
   | { readonly type: 'seal-report'; readonly exposed: readonly string[] }

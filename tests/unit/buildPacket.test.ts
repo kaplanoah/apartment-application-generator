@@ -54,7 +54,7 @@ describe('buildPacket', () => {
           ],
         },
       ],
-      (done) => progress.push(done),
+      { onProgress: (done) => progress.push(done) },
     );
 
     expect(packet.pageCount).toBe(7);
@@ -76,7 +76,7 @@ describe('buildPacket', () => {
     ]) {
       expect(front).toContain(text);
     }
-    expect(front).toMatch(/01 Cover Letter .*2 .*02 Pay Stubs .*last 2 months .*3 .*03 ID .*6/);
+    expect(front).toMatch(/CONTENTS Cover Letter 2 Pay Stubs · last 2 months 3 ID 6/);
     expect(pdf.pages[1]).toContain('Cover Letter.pdf');
     expect(pdf.pages[2]).toContain('stub A');
     expect(pdf.pages[3]).toContain('stub B');
@@ -136,7 +136,7 @@ describe('buildPacket', () => {
     const packet = await buildPacket(cover, sections);
     const pdf = await readPdf(packet.bytes);
     expect(pdf.pages[1]).toContain('CONTENTS (CONTINUED)');
-    expect(pdf.pages[0]).toMatch(/01 Section 1 .*3/); // two cover pages, so content starts on page 3
+    expect(pdf.pages[0]).toMatch(/CONTENTS Section 1 3 /); // two cover pages, so content starts on page 3
     expect(pdf.pages[2]).toContain('doc 1');
     expect(pdf.pages).toHaveLength(42);
   });

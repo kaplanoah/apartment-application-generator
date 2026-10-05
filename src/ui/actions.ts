@@ -8,6 +8,7 @@ import type { PickedFolder } from '../browser/readFolder';
 import type { BuiltPacket, PacketDocument, PacketSection } from '../pdf/buildPacket';
 import type { CoverDetails } from '../pdf/cover';
 import type { ImagePreparer } from '../pdf/images';
+import type { ImageSizeLimits } from '../worker/protocol';
 import { currentFooter, type AppState, type ContactState, type Notice } from './state';
 import type { Store } from './store';
 
@@ -18,11 +19,14 @@ export interface Services {
     cover: CoverDetails,
     sections: readonly PacketSection[],
     onProgress: (done: number, total: number) => void,
+    imageLimits: ImageSizeLimits | null,
   ) => Promise<BuiltPacket>;
   readonly saveFile: (bytes: Uint8Array, fileName: string) => void;
 }
 
 const MAX_CONTACT_FILE_BYTES = 64 * 1024;
+/** Share of the progress bar spent reading files; the rest is building the PDF. */
+const READING_SHARE = 0.25;
 
 export function setAddress(store: Store<AppState>, address: string): void {
   store.update({ address });
@@ -89,15 +93,16 @@ export async function generate(store: Store<AppState>, services: Services): Prom
     return;
   }
 
-  const working = (step: string) => store.update({ build: { status: 'working', step } });
+  const working = (progress: number, label: string) => store.update({ build: { status: 'working', progress, label } });
   try {
-    const prepareImage = services.createImagePreparer(getSizePreset(state.sizePreset));
+    const preset = getSizePreset(state.sizePreset);
+    const prepareImage = services.createImagePreparer(preset);
     const all = sections.flatMap((section) => section.documents.map((doc) => ({ section, doc })));
     const prepared = new Map<LibraryDocument<File>, PacketDocument>();
     const problems: string[] = [];
 
     for (const [index, { section, doc }] of all.entries()) {
-      working(`Reading files… ${index + 1} of ${all.length}`);
+      working((READING_SHARE * index) / all.length, 'Reading your files…');
       const label = `${section.title}/${doc.path}`;
       try {
         prepared.set(doc, await readDocument(doc, label, prepareImage));
@@ -123,24 +128,18 @@ export async function generate(store: Store<AppState>, services: Services): Prom
       preparedOn: state.today,
     };
 
-    const built = await services.buildPacket(cover, packetSections, (done, total) =>
-      working(`Building the PDF… ${Math.round((done / total) * 100)}%`),
+    const imageLimits = preset.maxImageEdge ? { maxEdge: preset.maxImageEdge, quality: preset.jpegQuality } : null;
+    working(READING_SHARE, 'Building your packet…');
+    const built = await services.buildPacket(
+      cover,
+      packetSections,
+      (done, total) => working(READING_SHARE + (1 - READING_SHARE) * (done / total), 'Building your packet…'),
+      imageLimits,
     );
     const fileName = packetFileName(state.address, state.today);
     services.saveFile(built.bytes, fileName);
-
-    const largestInputs = all
-      .map(({ section, doc }) => ({ path: `${section.title}/${doc.path}`, byteLength: doc.file.size }))
-      .sort((a, b) => b.byteLength - a.byteLength)
-      .slice(0, 3);
     store.update({
-      build: {
-        status: 'done',
-        fileName,
-        pageCount: built.pageCount,
-        byteLength: built.bytes.byteLength,
-        largestInputs,
-      },
+      build: { status: 'done', fileName, pageCount: built.pageCount, byteLength: built.bytes.byteLength },
     });
   } catch (error) {
     store.update({ build: { status: 'error', ...toNotice(error, 'Something went wrong while building the PDF.') } });
@@ -163,7 +162,7 @@ async function readDocument(
  * shown as-is; anything else gets the fallback, with the browser's own text
  * labelled as a technical detail rather than presented as the explanation.
  */
-export function toNotice(error: unknown, fallback: string): Notice {
+function toNotice(error: unknown, fallback: string): Notice {
   if (error instanceof UserFacingError) return { message: error.message, details: error.details };
   const technical = error instanceof Error ? error.message.trim() : '';
   return { message: fallback, details: technical ? [`Technical detail: ${technical}`] : [] };

@@ -21,7 +21,8 @@
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test",
     "example": "tsx scripts/make-example-docs.ts",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:e2e"
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run deadcode && npm test && npm run test:e2e",
+    "deadcode": "knip"
   },
   "dependencies": {
     "pdf-lib": "1.17.1"
@@ -33,6 +34,7 @@
     "eslint": "^10.12.0",
     "globals": "^17.13.0",
     "happy-dom": "^20.14.5",
+    "knip": "^6.39.0",
     "pdfjs-dist": "^6.4.299",
     "prettier": "^3.9.9",
     "tsx": "^4.23.15",

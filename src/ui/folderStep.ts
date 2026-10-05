@@ -1,4 +1,4 @@
-import { folderFromDrop, folderFromInput } from '../browser/readFolder';
+import { folderFromInput } from '../browser/readFolder';
 import { CONTACT_FILE_EXAMPLE, CONTACT_FILE_NAME } from '../core/contactInfo';
 import { loadFolder } from './actions';
 import { h, replaceChildren } from './dom';
@@ -29,7 +29,7 @@ export function createFolderStep(store: Store<AppState>) {
 
   const chooseButton = h(
     'button',
-    { type: 'button', class: 'button secondary', onclick: () => input.click() },
+    { type: 'button', class: 'button primary', onclick: () => input.click() },
     'Choose folder…',
   );
   const status = h('div', { class: 'drop-status', 'aria-live': 'polite' });
@@ -37,34 +37,31 @@ export function createFolderStep(store: Store<AppState>) {
   const zone = h(
     'div',
     { class: 'dropzone', id: 'dropzone' },
-    h('p', { class: 'drop-title' }, 'Drag your documents folder here'),
-    h('p', { class: 'hint' }, 'or ', chooseButton),
+    chooseButton,
     status,
+    h(
+      'p',
+      { class: 'faint' },
+      'Drag and drop isn’t supported: browsers don’t read large, nested folders reliably that way.',
+    ),
     input,
   );
 
-  // A folder dropped just outside the zone would make the browser open it and
-  // leave the app, so file drops anywhere else on the page are ignored.
-  for (const type of ['dragover', 'drop'] as const) {
-    window.addEventListener(type, (event) => {
-      if (event.dataTransfer?.types.includes('Files') && !zone.contains(event.target as Node)) event.preventDefault();
+  // A folder dropped on the page would make the browser open it and leave
+  // the app, so drops are caught everywhere and answered with a pointer to
+  // the button instead.
+  window.addEventListener('dragover', (event) => {
+    if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
+  });
+  window.addEventListener('drop', (event) => {
+    if (!event.dataTransfer?.types.includes('Files')) return;
+    event.preventDefault();
+    store.update({
+      folderError: {
+        message: 'Drag and drop isn’t supported. Click “Choose folder…” and pick your folder.',
+        details: [],
+      },
     });
-  }
-
-  zone.addEventListener('dragover', (event) => {
-    if (!event.dataTransfer?.types.includes('Files')) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
-    zone.classList.add('over');
-  });
-  zone.addEventListener('dragleave', (event) => {
-    if (!zone.contains(event.relatedTarget as Node | null)) zone.classList.remove('over');
-  });
-  zone.addEventListener('drop', (event) => {
-    if (!event.dataTransfer?.types.includes('Files')) return;
-    event.preventDefault();
-    zone.classList.remove('over');
-    void loadFolder(store, folderFromDrop(event.dataTransfer));
   });
 
   const element = h(
@@ -89,7 +86,10 @@ export function createFolderStep(store: Store<AppState>) {
         people > 0 && ` · contact info for ${people} ${people === 1 ? 'person' : 'people'}`,
       );
     } else {
-      replaceChildren(status, 'Reads PDFs, photos (JPG, PNG, HEIC) and text files, loose or in folders.');
+      replaceChildren(
+        status,
+        'Pick the folder that holds your documents: PDFs, photos (JPG, PNG, HEIC) and text files.',
+      );
     }
     zone.classList.toggle('loaded', state.folder !== null);
 
