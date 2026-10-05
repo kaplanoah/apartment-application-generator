@@ -32,7 +32,12 @@ function fakeServices(): Services & { saved: { bytes: Uint8Array; fileName: stri
     createImagePreparer: () => prepareImageAsIs,
     buildPacket: vi.fn<Services['buildPacket']>(async (_cover, sections, onProgress) => {
       onProgress(1, 1);
-      return { bytes: new Uint8Array(1234), pageCount: 1 + sections.reduce((n, s) => n + s.documents.length, 0) };
+      return {
+        bytes: new Uint8Array(1234),
+        pageCount: 1 + sections.reduce((n, s) => n + s.documents.length, 0),
+        sectionBytes: sections.map(() => 0),
+        cleanupSavings: 0,
+      };
     }),
     saveFile: (bytes, fileName) => saved.push({ bytes, fileName }),
   };

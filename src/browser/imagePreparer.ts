@@ -21,12 +21,11 @@ const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
 export function createImagePreparer(preset: SizePreset): ImagePreparer {
   return async (bytes, fileName) => {
     const asIs = tryUseAsIs(bytes);
-    if (asIs && preset.maxImageEdge === null) return asIs;
 
     const image = await decode(bytes, fileName);
     try {
       const longEdge = Math.max(image.naturalWidth, image.naturalHeight);
-      const limit = preset.maxImageEdge ?? longEdge;
+      const limit = preset.maxImageEdge;
       if (asIs && longEdge <= limit) return asIs;
       const redrawn = await redraw(
         image.element,

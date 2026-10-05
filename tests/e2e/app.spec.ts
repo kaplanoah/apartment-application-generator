@@ -21,6 +21,7 @@ let noContactFolder: string;
 let unusableFolder: string;
 let lockedFolder: string;
 let photosFolder: string;
+let statementsFolder: string;
 let bigPhotoBytes: number;
 
 test.beforeAll(async ({ browser }) => {
@@ -74,6 +75,17 @@ test.beforeAll(async ({ browser }) => {
   scan.addPage([612, 792]).drawImage(scanImage, { x: 36, y: 200, width: 540, height: 360 });
   const scannedPdf = await scan.save();
   bigPhotoBytes = big.byteLength;
+  // Statements that each carry the same big image, like a bank's logo on every page.
+  const statements = new Map<string, Uint8Array>();
+  for (const month of ['2026-07', '2026-08', '2026-09']) {
+    const statement = await PDFDocument.create();
+    const logo = await statement.embedJpg(bigPlain);
+    statement.addPage([612, 792]).drawImage(logo, { x: 36, y: 600, width: 270, height: 180 });
+    statements.set(`Bank Statements/${month}.pdf`, await statement.save());
+  }
+  statements.set('ID.jpg', big);
+  statementsFolder = join(workspace, 'Statements');
+  await writeFiles(statementsFolder, statements);
   photosFolder = join(workspace, 'Photos');
   await writeFiles(
     photosFolder,
@@ -217,7 +229,7 @@ test('photos become upright pages, and the size choice shrinks big photos', asyn
   await addTile(page, 'ID');
 
   const results: { bytes: number; pages: { width: number; height: number }[] }[] = [];
-  for (const label of ['Full quality', 'Smaller']) {
+  for (const label of ['High', 'Smaller']) {
     await page.getByText(label, { exact: true }).click();
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Generate PDF' }).click();
@@ -244,7 +256,7 @@ test('big photos inside PDFs, like scans, are shrunk too while the page stays th
   await addTile(page, 'Scanned ID');
 
   const sizes: number[] = [];
-  for (const label of ['Full quality', 'Smaller']) {
+  for (const label of ['High', 'Smaller']) {
     await page.getByText(label, { exact: true }).click();
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Generate PDF' }).click();
@@ -256,8 +268,30 @@ test('big photos inside PDFs, like scans, are shrunk too while the page stays th
     ]);
     sizes.push(bytes.byteLength);
   }
-  expect(sizes[0]).toBeGreaterThan(bigPhotoBytes); // full quality keeps the scan as it was
+  expect(sizes[0]).toBeGreaterThan(bigPhotoBytes); // High keeps a 3000px scan as it was
   expect(sizes[1]).toBeLessThan((sizes[0] as number) * 0.3);
+});
+
+test('repeated images are stored once, and big packets say where the size comes from', async ({ page }) => {
+  test.slow(); // builds a packet from large statements and a photo
+  await openApp(page);
+  await chooseFolder(page, statementsFolder);
+  await addTile(page, 'Bank Statements');
+  await card(page, 'Bank Statements').getByLabel('Bank Statements: what to include').selectOption('all');
+  await addTile(page, 'ID');
+  await page.getByText('High', { exact: true }).click();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Generate PDF' }).click();
+  const bytes = await readFile(await (await downloadPromise).path());
+
+  expect((await PDFDocument.load(bytes)).getPageCount()).toBe(5);
+  expect(bytes.byteLength).toBeGreaterThan(bigPhotoBytes * 2);
+  expect(bytes.byteLength).toBeLessThan(bigPhotoBytes * 2.5); // the statements' three copies are stored once
+  const report = page.locator('.size-report');
+  await expect(report).toContainText(/Bank Statements: [\d.]+ MB → about [\d.]+ MB/);
+  await expect(report).toContainText('ID:');
+  await expect(report).toContainText('Repeated images and fonts are stored once, which saved');
+  await expect(report).toContainText('Good to know');
 });
 
 test('explains that dropping a folder isn’t supported, without leaving the page', async ({ page }) => {

@@ -1,7 +1,7 @@
 import { parseContactInfo } from '../core/contactInfo';
 import { UserFacingError } from '../core/errors';
 import { buildLibrary, type LibraryDocument } from '../core/library';
-import { planPacket } from '../core/packet';
+import { planPacket, type PlannedSection } from '../core/packet';
 import { packetFileName } from '../core/naming';
 import { getSizePreset, type SizePreset } from '../core/sizePresets';
 import type { PickedFolder } from '../browser/readFolder';
@@ -9,7 +9,7 @@ import type { BuiltPacket, PacketDocument, PacketSection } from '../pdf/buildPac
 import type { CoverDetails } from '../pdf/cover';
 import type { ImagePreparer } from '../pdf/images';
 import type { ImageSizeLimits } from '../worker/protocol';
-import { currentFooter, type AppState, type ContactState, type Notice } from './state';
+import { currentFooter, type AppState, type ContactState, type Notice, type SizeReport } from './state';
 import type { Store } from './store';
 
 /** Everything that touches the browser, injected so actions can be tested. */
@@ -128,7 +128,7 @@ export async function generate(store: Store<AppState>, services: Services): Prom
       preparedOn: state.today,
     };
 
-    const imageLimits = preset.maxImageEdge ? { maxEdge: preset.maxImageEdge, quality: preset.jpegQuality } : null;
+    const imageLimits = { maxEdge: preset.maxImageEdge, quality: preset.jpegQuality };
     working(READING_SHARE, 'Building your packet…');
     const built = await services.buildPacket(
       cover,
@@ -138,12 +138,23 @@ export async function generate(store: Store<AppState>, services: Services): Prom
     );
     const fileName = packetFileName(state.address, state.today);
     services.saveFile(built.bytes, fileName);
+    const sizeReport = reportSizes(sections, built);
     store.update({
-      build: { status: 'done', fileName, pageCount: built.pageCount, byteLength: built.bytes.byteLength },
+      build: { status: 'done', fileName, pageCount: built.pageCount, byteLength: built.bytes.byteLength, sizeReport },
     });
   } catch (error) {
     store.update({ build: { status: 'error', ...toNotice(error, 'Something went wrong while building the PDF.') } });
   }
+}
+
+/** Each section's original file sizes next to the space it takes up in the packet. */
+function reportSizes(sections: readonly PlannedSection<File>[], built: BuiltPacket): SizeReport {
+  const report = sections.map((section, i) => ({
+    title: section.title,
+    before: section.documents.reduce((sum, doc) => sum + doc.file.size, 0),
+    after: built.sectionBytes[i] ?? 0,
+  }));
+  return { sections: report.sort((a, b) => b.after - a.after), sharedSaved: built.cleanupSavings };
 }
 
 async function readDocument(

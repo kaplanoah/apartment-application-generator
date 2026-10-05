@@ -86,11 +86,12 @@ describe('naming', () => {
 });
 
 describe('size presets', () => {
-  it('defaults to balanced and gets smaller from full to smaller', () => {
+  it('defaults to balanced, from about 110 to 300 dpi', () => {
     expect(getSizePreset(DEFAULT_SIZE_PRESET).id).toBe('balanced');
-    const [smaller, balanced, full] = SIZE_PRESETS;
-    expect(full?.maxImageEdge).toBeNull();
+    const [smaller, balanced, high] = SIZE_PRESETS;
     expect(smaller?.maxImageEdge).toBeLessThan(balanced?.maxImageEdge ?? 0);
+    expect(balanced?.maxImageEdge).toBeLessThan(high?.maxImageEdge ?? 0);
+    expect(high?.maxImageEdge).toBeGreaterThanOrEqual(3000); // about 300 dpi across a letter page
     expect(smaller?.jpegQuality).toBeLessThan(balanced?.jpegQuality ?? 0);
   });
 });

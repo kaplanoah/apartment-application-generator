@@ -2,11 +2,15 @@ import { planPacket } from '../core/packet';
 import { SIZE_PRESETS, type SizePresetId } from '../core/sizePresets';
 import { generate, type Services } from './actions';
 import { h, replaceChildren } from './dom';
-import type { AppState } from './state';
+import type { AppState, SizeReport } from './state';
 import type { Store } from './store';
 
 /** Many application portals and inboxes stop accepting files around here. */
 const LARGE_FILE_BYTES = 10 * 1024 * 1024;
+/** Packets at least this big get a breakdown of where the size comes from. */
+const REPORT_FROM_BYTES = 5 * 1024 * 1024;
+const SECTIONS_IN_REPORT = 4;
+const NOTABLE_SAVING_BYTES = 100 * 1024;
 
 /** Step 4: pick a size and build the PDF. */
 export function createGenerateStep(store: Store<AppState>, services: Services) {
@@ -102,6 +106,7 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
               h('strong', null, build.fileName),
               ` to your Downloads folder: ${build.pageCount} pages, ${formatBytes(build.byteLength)}.`,
             ),
+            build.byteLength >= REPORT_FROM_BYTES && sizeBreakdown(build.sizeReport),
             build.byteLength > LARGE_FILE_BYTES &&
               h(
                 'p',
@@ -118,6 +123,38 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
 
   update(store.get());
   return { element, update };
+}
+
+/** The biggest sections, how much shrinking saved, and a note on starting with smaller files. */
+function sizeBreakdown(report: SizeReport): HTMLElement {
+  return h(
+    'div',
+    { class: 'size-report' },
+    h('p', null, 'Where the size comes from:'),
+    h(
+      'ul',
+      null,
+      ...report.sections
+        .slice(0, SECTIONS_IN_REPORT)
+        .map((section) =>
+          h(
+            'li',
+            null,
+            `${section.title}: `,
+            section.before - section.after >= NOTABLE_SAVING_BYTES
+              ? `${formatBytes(section.before)} → about ${formatBytes(section.after)}`
+              : formatBytes(section.after),
+          ),
+        ),
+    ),
+    report.sharedSaved >= NOTABLE_SAVING_BYTES &&
+      h('p', null, `Repeated images and fonts are stored once, which saved ${formatBytes(report.sharedSaved)}.`),
+    h(
+      'p',
+      { class: 'faint' },
+      'Good to know: scans made at 300 dpi, or with the iPhone Notes scanner, start out much smaller than 600 dpi scans or photos.',
+    ),
+  );
 }
 
 function formatBytes(bytes: number): string {

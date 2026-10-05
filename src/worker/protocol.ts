@@ -34,7 +34,13 @@ export type WorkerResponse =
       readonly quality: number;
     }
   | { readonly type: 'progress'; readonly done: number; readonly total: number }
-  | { readonly type: 'done'; readonly bytes: Uint8Array; readonly pageCount: number }
+  | {
+      readonly type: 'done';
+      readonly bytes: Uint8Array;
+      readonly pageCount: number;
+      readonly sectionBytes: readonly number[];
+      readonly cleanupSavings: number;
+    }
   | {
       readonly type: 'error';
       readonly message: string;
@@ -62,7 +68,13 @@ export function isWorkerResponse(value: unknown): value is WorkerResponse {
         Number.isFinite(message.quality)
       );
     case 'done':
-      return message.bytes instanceof Uint8Array && Number.isInteger(message.pageCount);
+      return (
+        message.bytes instanceof Uint8Array &&
+        Number.isInteger(message.pageCount) &&
+        Array.isArray(message.sectionBytes) &&
+        message.sectionBytes.every((value) => Number.isFinite(value)) &&
+        Number.isFinite(message.cleanupSavings)
+      );
     case 'error':
       return (
         typeof message.message === 'string' && isStringArray(message.details) && typeof message.expected === 'boolean'

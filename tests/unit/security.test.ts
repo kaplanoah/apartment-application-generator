@@ -55,7 +55,24 @@ describe('worker seal', () => {
 describe('worker messages', () => {
   it('accepts only well-formed replies', () => {
     expect(isWorkerResponse({ type: 'progress', done: 1, total: 2 })).toBe(true);
-    expect(isWorkerResponse({ type: 'done', bytes: new Uint8Array(), pageCount: 3 })).toBe(true);
+    expect(
+      isWorkerResponse({
+        type: 'done',
+        bytes: new Uint8Array(),
+        pageCount: 3,
+        sectionBytes: [0, 12],
+        cleanupSavings: 5,
+      }),
+    ).toBe(true);
+    expect(
+      isWorkerResponse({
+        type: 'done',
+        bytes: new Uint8Array(),
+        pageCount: 3,
+        sectionBytes: ['x'],
+        cleanupSavings: 5,
+      }),
+    ).toBe(false);
     expect(isWorkerResponse({ type: 'seal-report', exposed: [] })).toBe(true);
     expect(isWorkerResponse({ type: 'error', message: 'x', details: [], expected: true })).toBe(true);
     expect(isWorkerResponse({ type: 'shrink-image', id: 1, jpeg: new Uint8Array(), maxEdge: 1600, quality: 0.8 })).toBe(
