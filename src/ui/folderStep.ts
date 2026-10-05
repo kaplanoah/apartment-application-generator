@@ -85,11 +85,13 @@ export function createFolderStep(store: Store<AppState>) {
         ` · ${count} ${count === 1 ? 'item' : 'items'} to arrange`,
       );
     } else {
-      replaceChildren(status, 'Reads PDFs and photos (JPG, PNG, HEIC), loose or in folders.');
+      replaceChildren(status, 'Reads PDFs, photos (JPG, PNG, HEIC) and text files, loose or in folders.');
     }
     zone.classList.toggle('loaded', state.folder !== null);
 
     const ignored = state.folder?.library.ignored ?? [];
+    const needPdf = ignored.filter((item) => item.reason === 'needs-pdf');
+    const unused = ignored.filter((item) => item.reason !== 'needs-pdf');
     replaceChildren(
       feedback,
       state.folderError &&
@@ -101,15 +103,30 @@ export function createFolderStep(store: Store<AppState>) {
             h('ul', null, ...state.folderError.details.map((d) => h('li', null, d))),
         ),
       !state.folderError &&
-        ignored.length > 0 &&
+        needPdf.length > 0 &&
+        h(
+          'div',
+          { class: 'notice warn', role: 'status' },
+          h('p', null, needPdf.length === 1 ? 'Save this as a PDF to use it:' : 'Save these as PDFs to use them:'),
+          h(
+            'ul',
+            null,
+            ...needPdf.map((item) =>
+              h('li', null, h('strong', null, item.path), ` — ${item.exportSteps ?? 'export it as PDF'}`),
+            ),
+          ),
+          h('p', null, 'Keep the PDF next to the original with the same name, then add the folder again.'),
+        ),
+      !state.folderError &&
+        unused.length > 0 &&
         h(
           'p',
           { class: 'faint' },
           'Not used: ',
-          ignored
+          unused
             .map(
               (item) =>
-                `${item.path} (${item.reason === 'unsupported-type' ? 'file type not supported' : 'no PDFs or photos inside'})`,
+                `${item.path} (${item.reason === 'unsupported-type' ? 'file type not supported' : 'nothing usable inside'})`,
             )
             .join(', '),
         ),

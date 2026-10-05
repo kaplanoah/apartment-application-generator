@@ -37,8 +37,8 @@ test.beforeAll(async ({ browser }) => {
   await writeFiles(
     unusableFolder,
     new Map([
-      ['notes.txt', new TextEncoder().encode('hello')],
-      ['Old/readme.docx', new Uint8Array([1, 2, 3])],
+      ['archive.zip', new Uint8Array([1, 2, 3])],
+      ['Current Lease.pages', new Uint8Array([1, 2, 3])],
     ]),
   );
 
@@ -132,14 +132,17 @@ test('says it is local-only and ships a strict no-network policy', async ({ page
 test('builds a packet in the chosen order with cover, contents, links and footers', async ({ page }) => {
   const { outside, errors } = await openApp(page);
   await page.getByLabel('Apartment address').fill('123 Main St, Apt 4B');
-  await expect(page.getByLabel('Footer on every page')).toHaveValue(
-    'For 123 Main St, Apt 4B application only · Oct 2026',
-  );
+  await expect(page.locator('#footer-preview')).toHaveText('Application for 123 Main St, Apt 4B only · Oct 2026');
 
   await chooseFolder(page, docsFolder);
   await expect(page.locator('.drop-status')).toContainText('“Apartment Docs”');
-  await expect(page.locator('.people')).toContainText('Noah Example');
-  await expect(page.locator('.people')).toContainText('anna@example.com');
+  await expect(page.locator('.people')).toContainText('Alex Sample');
+  await expect(page.locator('.people')).toContainText('jordan@example.com');
+  await expect(page.locator('#footer-preview')).toHaveText(
+    'Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B only · Oct 2026',
+  );
+  // Cover Letter.pages has its exported PDF beside it, so nothing asks for it.
+  await expect(page.getByText('Save this as a PDF')).toHaveCount(0);
 
   // Drag one tile in, click the rest.
   await page.getByRole('button', { name: 'Add Cover Letter', exact: true }).dragTo(page.locator('.packet'));
@@ -168,7 +171,7 @@ test('builds a packet in the chosen order with cover, contents, links and footer
   expect(pdf.title).toBe('Rental Application – 123 Main St, Apt 4B');
 
   const cover = pdf.pages[0] ?? '';
-  for (const text of ['Rental Application', '123 Main St, Apt 4B', 'Noah Example', 'anna@example.com', 'CONTENTS']) {
+  for (const text of ['Rental Application', '123 Main St, Apt 4B', 'Alex Sample', 'jordan@example.com', 'CONTENTS']) {
     expect(cover).toContain(text);
   }
   expect(cover).toMatch(/01 Cover Letter .*2/);
@@ -177,10 +180,10 @@ test('builds a packet in the chosen order with cover, contents, links and footer
   expect(cover).toMatch(/04 Bank Statements .*Aug 1 – Sep 30, 2026 .*9/);
 
   expect(pdf.pages[1]).toContain('Cover Letter');
-  expect(pdf.pages[2]).toContain('Pay Stub 2026-09-30'); // Anna's subfolder sorts first
+  expect(pdf.pages[2]).toContain('Pay Stub 2026-10-02'); // Alex's subfolder sorts first
   pdf.pages.forEach((text, i) => {
     expect(text).toContain(`Page ${i + 1} of 14`);
-    expect(text).toContain('For 123 Main St, Apt 4B application only');
+    expect(text).toContain('Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B only · Oct 2026');
   });
   expect(pdf.outline).toEqual(['Cover Letter', 'Pay Stubs', 'W-2s', 'Bank Statements']);
   expect(pdf.links[0]).toEqual([1, 2, 4, 8]);
@@ -223,6 +226,23 @@ test('photos become upright pages, and the size choice shrinks big photos', asyn
   expect(smaller.bytes).toBeLessThan(full.bytes * 0.4);
 });
 
+test('text files become pages, and the security details link points to the repository', async ({ page }) => {
+  await openApp(page);
+  const details = page.getByRole('link', { name: 'Details' });
+  await expect(details).toHaveAttribute('href', /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/security\/policy$/);
+  await expect(details).toHaveAttribute('target', '_blank');
+  await expect(details).toHaveAttribute('rel', 'noopener noreferrer');
+
+  await chooseFolder(page, docsFolder);
+  await addTile(page, 'Note to Landlord');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Generate PDF' }).click();
+  const pdf = await readPdf(new Uint8Array(await readFile(await (await downloadPromise).path())));
+  expect(pdf.pages).toHaveLength(2);
+  expect(pdf.pages[1]).toContain('Thank you for considering our application.');
+  expect(pdf.pages[1]).toContain('Alex & Jordan');
+});
+
 test('cards can be reordered and removed with the keyboard', async ({ page }) => {
   await openApp(page);
   await chooseFolder(page, docsFolder);
@@ -244,7 +264,7 @@ test('explains the contact file format when it is missing', async ({ page }) => 
   await chooseFolder(page, noContactFolder);
   const notice = page.locator('.applicants .notice');
   await expect(notice).toContainText('There’s no contact-info.txt');
-  await expect(notice.locator('pre')).toContainText('Name: Noah Example');
+  await expect(notice.locator('pre')).toContainText('Name: Alex Sample');
 });
 
 test('gives clear feedback when the folder has nothing usable', async ({ page }) => {
@@ -252,7 +272,10 @@ test('gives clear feedback when the folder has nothing usable', async ({ page })
   await chooseFolder(page, unusableFolder);
   const alert = page.getByRole('alert');
   await expect(alert).toContainText('No usable documents in “Unusable”');
-  await expect(alert).toContainText('notes.txt');
+  await expect(alert).toContainText('archive.zip');
+  await expect(alert).toContainText(
+    'Current Lease.pages: save it as a PDF first (in Pages, choose File → Export To → PDF)',
+  );
 });
 
 test('names password-protected PDFs and how to fix them', async ({ page }) => {

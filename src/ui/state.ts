@@ -2,6 +2,7 @@ import type { CalendarDate } from '../core/calendar';
 import type { ContactInfo } from '../core/contactInfo';
 import type { Library } from '../core/library';
 import type { PacketItem } from '../core/packet';
+import { footerText } from '../core/naming';
 import { DEFAULT_SIZE_PRESET, type SizePresetId } from '../core/sizePresets';
 
 export type ContactState =
@@ -35,9 +36,6 @@ export type BuildStatus =
 export interface AppState {
   readonly today: CalendarDate;
   readonly address: string;
-  readonly footer: string;
-  /** Once the footer is edited by hand it stops following the address. */
-  readonly footerEdited: boolean;
   readonly folder: LoadedFolder | null;
   readonly folderLoading: boolean;
   readonly folderError: Notice | null;
@@ -46,12 +44,17 @@ export interface AppState {
   readonly build: BuildStatus;
 }
 
+/** The footer printed on every page, from the applicants and the address. */
+export function currentFooter(state: AppState): string {
+  const contact = state.folder?.contact;
+  const names = contact?.status === 'loaded' ? contact.info.applicants.map((person) => person.name) : [];
+  return footerText(names, state.address, state.today);
+}
+
 export function initialState(today: CalendarDate): AppState {
   return {
     today,
     address: '',
-    footer: '',
-    footerEdited: false,
     folder: null,
     folderLoading: false,
     folderError: null,

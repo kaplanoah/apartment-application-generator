@@ -4,7 +4,7 @@ import { libraryOf } from '../support/library';
 describe('buildLibrary', () => {
   it('offers top-level folders and readable top-level files, sorted by name', () => {
     const library = libraryOf([
-      'W-2s/noah_2025.pdf',
+      'W-2s/alex_2025.pdf',
       'Cover Letter.pdf',
       'ID/license.jpg',
       'Pay Stubs 10/x.pdf',
@@ -33,35 +33,35 @@ describe('buildLibrary', () => {
   });
 
   it('is strict about uneven depths', () => {
-    const library = libraryOf(['Taxes/Noah/2025/1040.pdf', 'Taxes/Anna/1040_2025.pdf']);
+    const library = libraryOf(['Taxes/Alex/2025/1040.pdf', 'Taxes/Jordan/1040_2025.pdf']);
     const taxes = library.options[0];
     if (taxes?.kind !== 'folder') throw new Error('expected folder');
-    expect(taxes.documents.map((d) => d.path)).toEqual(['Noah/2025/1040.pdf']);
-    expect(taxes.skipped).toEqual([{ path: 'Anna/1040_2025.pdf', reason: 'different-level' }]);
+    expect(taxes.documents.map((d) => d.path)).toEqual(['Alex/2025/1040.pdf']);
+    expect(taxes.skipped).toEqual([{ path: 'Jordan/1040_2025.pdf', reason: 'different-level' }]);
   });
 
   it('measures depth using only files it can read', () => {
-    const library = libraryOf(['ID/license.jpg', 'ID/old/notes/readme.txt']);
+    const library = libraryOf(['ID/license.jpg', 'ID/old/notes/archive.zip']);
     const id = library.options[0];
     if (id?.kind !== 'folder') throw new Error('expected folder');
     expect(id.documents.map((d) => d.path)).toEqual(['license.jpg']);
-    expect(id.skipped).toEqual([{ path: 'old/notes/readme.txt', reason: 'unsupported-type' }]);
+    expect(id.skipped).toEqual([{ path: 'old/notes/archive.zip', reason: 'unsupported-type' }]);
   });
 
   it('orders files by subfolder, newest first, undated last', () => {
     const library = libraryOf([
-      'Stubs/Noah/2026-08-01.pdf',
-      'Stubs/Noah/notes.pdf',
-      'Stubs/Noah/2026-09-01.pdf',
-      'Stubs/Anna/2026-07-01.pdf',
+      'Stubs/Alex/2026-08-01.pdf',
+      'Stubs/Alex/notes.pdf',
+      'Stubs/Alex/2026-09-01.pdf',
+      'Stubs/Jordan/2026-07-01.pdf',
     ]);
     const stubs = library.options[0];
     if (stubs?.kind !== 'folder') throw new Error('expected folder');
     expect(stubs.documents.map((d) => d.path)).toEqual([
-      'Anna/2026-07-01.pdf',
-      'Noah/2026-09-01.pdf',
-      'Noah/2026-08-01.pdf',
-      'Noah/notes.pdf',
+      'Alex/2026-09-01.pdf',
+      'Alex/2026-08-01.pdf',
+      'Alex/notes.pdf',
+      'Jordan/2026-07-01.pdf',
     ]);
     expect(stubs.hasDates).toBe(true);
   });
@@ -86,12 +86,42 @@ describe('buildLibrary', () => {
   });
 
   it('reports top-level items it cannot use', () => {
-    const library = libraryOf(['notes.docx', 'Old/readme.txt', 'Cover.pdf']);
+    const library = libraryOf(['archive.zip', 'Old/backup.zip', 'Cover.pdf']);
     expect(library.options.map((o) => o.title)).toEqual(['Cover']);
     expect(library.ignored).toEqual([
-      { path: 'notes.docx', reason: 'unsupported-type' },
+      { path: 'archive.zip', reason: 'unsupported-type' },
       { path: 'Old/', reason: 'no-usable-files' },
     ]);
+  });
+
+  it('accepts plain-text files as documents', () => {
+    const library = libraryOf(['Note to Landlord.txt', 'Letters/2026-09_note.TXT']);
+    expect(library.options.map((o) => [o.title, o.kind === 'file' ? o.document.kind : o.documents[0]?.kind])).toEqual([
+      ['Letters', 'text'],
+      ['Note to Landlord', 'text'],
+    ]);
+  });
+
+  it('explains how to save Word, Pages and similar files as PDF', () => {
+    const library = libraryOf(['Current Lease.pages', 'Letters/reference.docx', 'Letters/old.pdf']);
+    expect(library.ignored).toEqual([
+      { path: 'Current Lease.pages', reason: 'needs-pdf', exportSteps: 'in Pages, choose File → Export To → PDF' },
+    ]);
+    const letters = library.options[0];
+    if (letters?.kind !== 'folder') throw new Error('expected folder');
+    expect(letters.skipped).toEqual([
+      { path: 'reference.docx', reason: 'needs-pdf', exportSteps: 'in Word, choose File → Save As and pick PDF' },
+    ]);
+  });
+
+  it('quietly skips an original when its exported PDF sits beside it', () => {
+    const library = libraryOf(['Cover Letter.pages', 'cover letter.PDF', 'Refs/a.docx', 'Refs/a.pdf', 'Refs/b.docx']);
+    expect(library.options.map((o) => o.title)).toEqual(['cover letter', 'Refs']);
+    expect(library.ignored).toEqual([]);
+    const refs = library.options[1];
+    if (refs?.kind !== 'folder') throw new Error('expected folder');
+    expect(refs.documents.map((d) => d.name)).toEqual(['a.pdf']);
+    expect(refs.skipped.map((skip) => skip.path)).toEqual(['b.docx']);
   });
 
   it('returns an empty library for no files', () => {

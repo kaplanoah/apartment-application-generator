@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { UserFacingError } from '../../src/core/errors';
 import { newPacketItem } from '../../src/core/packet';
 import type { PickedFolder } from '../../src/browser/readFolder';
-import { generate, loadFolder, setAddress, setFooter, type Services } from '../../src/ui/actions';
-import { initialState, type AppState } from '../../src/ui/state';
+import { generate, loadFolder, setAddress, type Services } from '../../src/ui/actions';
+import { currentFooter, initialState, type AppState } from '../../src/ui/state';
 import { Store } from '../../src/ui/store';
 import { prepareImageAsIs } from '../../src/pdf/images';
 import { sampleIdJpeg, samplePdf } from '../../scripts/lib/sampleDocs';
@@ -15,7 +15,7 @@ async function sampleFolder(): Promise<PickedFolder> {
   return {
     name: 'Docs',
     entries: [
-      { path: ['contact-info.txt'], file: file('contact-info.txt', 'Name: Noah\nEmail: n@x') },
+      { path: ['contact-info.txt'], file: file('contact-info.txt', 'Name: Alex\nEmail: n@x') },
       { path: ['Cover Letter.pdf'], file: file('Cover Letter.pdf', await samplePdf('Cover')) },
       { path: ['ID', 'license.jpg'], file: file('license.jpg', sampleIdJpeg()) },
       { path: ['Stubs', '2026-09-18.pdf'], file: file('2026-09-18.pdf', await samplePdf('Stub')) },
@@ -39,13 +39,13 @@ function fakeServices(): Services & { saved: { bytes: Uint8Array; fileName: stri
 }
 
 describe('details', () => {
-  it('suggests the footer from the address until it is edited', () => {
+  it('builds the footer from the address and the names in contact-info.txt', async () => {
     const store = newStore();
+    expect(currentFooter(store.get())).toBe('Rental application · Oct 2026');
     setAddress(store, '1 Elm St');
-    expect(store.get().footer).toBe('For 1 Elm St application only · Oct 2026');
-    setFooter(store, 'Custom');
-    setAddress(store, '2 Oak Ave');
-    expect(store.get().footer).toBe('Custom');
+    expect(currentFooter(store.get())).toBe('Application for 1 Elm St only · Oct 2026');
+    await loadFolder(store, sampleFolder());
+    expect(currentFooter(store.get())).toBe('Alex · Application for 1 Elm St only · Oct 2026');
   });
 });
 
@@ -59,7 +59,7 @@ describe('loadFolder', () => {
     expect(folder?.library.options.map((o) => o.title)).toEqual(['Cover Letter', 'ID', 'Stubs']);
     expect(folder?.contact).toEqual({
       status: 'loaded',
-      info: { applicants: [{ name: 'Noah', details: [{ label: 'Email', value: 'n@x' }] }], problems: [] },
+      info: { applicants: [{ name: 'Alex', details: [{ label: 'Email', value: 'n@x' }] }], problems: [] },
     });
   });
 
@@ -85,10 +85,19 @@ describe('loadFolder', () => {
 
     await loadFolder(
       store,
-      Promise.resolve({ name: 'Junk', entries: [{ path: ['notes.txt'], file: file('notes.txt', 'x') }] }),
+      Promise.resolve({
+        name: 'Junk',
+        entries: [
+          { path: ['archive.zip'], file: file('archive.zip', 'x') },
+          { path: ['Lease.pages'], file: file('Lease.pages', 'x') },
+        ],
+      }),
     );
     expect(store.get().folderError?.message).toMatch(/No usable documents in “Junk”/);
-    expect(store.get().folderError?.details).toEqual(['notes.txt']);
+    expect(store.get().folderError?.details).toEqual([
+      'archive.zip',
+      'Lease.pages: save it as a PDF first (in Pages, choose File → Export To → PDF).',
+    ]);
   });
 
   it('refuses an unexpectedly large contact file', async () => {
@@ -132,8 +141,8 @@ describe('generate', () => {
     ];
     expect(cover).toMatchObject({
       address: '123 Main St, Apt 4B',
-      applicants: [{ name: 'Noah' }],
-      footerText: 'For 123 Main St, Apt 4B application only · Oct 2026',
+      applicants: [{ name: 'Alex' }],
+      footerText: 'Alex · Application for 123 Main St, Apt 4B only · Oct 2026',
     });
     expect(sections.map((s) => s.title)).toEqual(['Stubs', 'ID', 'Cover Letter']);
     expect(sections[1]?.documents[0]).toMatchObject({ kind: 'image', image: { format: 'jpg', turn: 0 } });

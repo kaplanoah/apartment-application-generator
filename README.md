@@ -12,11 +12,13 @@ connects to the internet, and your documents are never transferred or stored. Se
 
 ## How it works
 
-1. **Your details.** Type the apartment's address. The footer fills in from it.
+1. **Your details.** Type the apartment's address. The footer on every page is made from
+   your names and the address, like
+   `Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B only · Oct 2026`.
 2. **Documents folder.** Drag in the folder that holds all your documents.
 3. **Order.** Every top-level folder and file in it appears as a tile. Drag the ones this
-   apartment wants into the list, in order. For folders with dated files, choose
-   **Last 2 months** or **Last 2 documents**, for example.
+   apartment wants into the list, in order, and drag a card back up to remove it. For
+   folders with dated files, choose **Last 2 months** or **Last 2 documents**, for example.
 4. **Generate.** Choose a file size and click **Generate PDF**. It's saved to your
    Downloads folder.
 
@@ -40,17 +42,17 @@ Apartment Docs/
 ├── contact-info.txt          ← names and contact details for the cover
 ├── Cover Letter.pdf          ← a top-level file is its own option
 ├── ID/
-│   ├── noah-license.jpg
-│   └── anna-passport.pdf
+│   ├── alex-license.jpg
+│   └── jordan-passport.pdf
 ├── Pay Stubs/
-│   ├── Noah/
+│   ├── Alex/
 │   │   ├── 2026-09-18.pdf
 │   │   └── 2026-09-04.pdf
-│   └── Anna/
-│       └── anna_2026-09-30.pdf
+│   └── Jordan/
+│       └── jordan_2026-09-30.pdf
 ├── W-2s/
-│   ├── Noah/w2_2025.pdf
-│   └── Anna/w2_2025.pdf
+│   ├── Alex/w2_2025.pdf
+│   └── Jordan/w2_2025.pdf
 └── Bank Statements/
     ├── Chase/2026-09.pdf
     └── Ally/2026-09.pdf
@@ -61,15 +63,19 @@ The rules:
 - **Each top-level folder and top-level file is one option** you can drag into the packet.
   Folder names are used as section titles, so name them the way you want them to read.
 - **Put dates in file names** so date ranges work: `2026-09-18` for a day, `2026-09` for a
-  month, `2025` for a year. They can go anywhere in the name (`anna_2026-09-30.pdf`).
+  month, `2025` for a year. They can go anywhere in the name (`jordan_2026-09-30.pdf`).
   US-style dates like `09-10-2026` are ignored because they're ambiguous.
 - **Subfolders are fine** (for example one per person). Their names don't matter. They're
   only shown as faint labels.
 - **One nesting level per folder.** A folder uses only the files at its deepest level. If
   `Bank Statements/` has `Chase/2026-09.pdf` and also a loose `summary.pdf`, the loose
   one is left out, and the app tells you so.
-- **Supported files:** PDF, JPG, PNG and HEIC (iPhone photos; HEIC needs Safari). Hidden
-  files like `.DS_Store` are ignored.
+- **Supported files:** PDF, JPG, PNG, HEIC (iPhone photos; HEIC needs Safari) and plain
+  text (`.txt`, laid out on letter pages). Hidden files like `.DS_Store` are ignored.
+- **Word, Pages and similar files** can't be reproduced faithfully outside their own apps,
+  so save them as PDF (Pages: File → Export To → PDF; Word: File → Save As → PDF). Keep
+  the PDF next to the original with the same name, and the original is skipped quietly.
+  The app tells you about any that still need a PDF.
 
 ### 3. Add your contact info
 
@@ -77,12 +83,12 @@ Create a plain-text file named `contact-info.txt` at the top of the folder. In T
 choose Format → Make Plain Text before saving.
 
 ```
-Name: Noah Example
-Email: noah@example.com
+Name: Alex Sample
+Email: alex@example.com
 Phone: (555) 010-2481
 
-Name: Anna Example
-Email: anna@example.com
+Name: Jordan Sample
+Email: jordan@example.com
 Phone: (555) 010-7730
 ```
 
@@ -99,11 +105,11 @@ Want to try it first? Use the fake sample folder in [`example/Apartment Docs`](e
 
 ## Date ranges
 
-| Choice               | What's included                                                                                                             |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Last 2 months**    | Files dated within the last two _full_ months. On Oct 4 that's Aug 1 – Sep 30. Switch to "through today" for Aug 4 – Oct 4. |
-| **Last 2 documents** | The newest two files **in each subfolder**, so "last 2 W-2s" gives two for each person when they're in `Noah/` and `Anna/`. |
-| **All files**        | Everything in the folder. Folders without dates always use this.                                                            |
+| Choice               | What's included                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Last 2 months**    | Files dated within the last two _full_ months. On Oct 4 that's Aug 1 – Sep 30. Switch to "through today" for Aug 4 – Oct 4.   |
+| **Last 2 documents** | The newest two files **in each subfolder**, so "last 2 W-2s" gives two for each person when they're in `Alex/` and `Jordan/`. |
+| **All files**        | Everything in the folder. Folders without dates always use this.                                                              |
 
 Folders start on a sensible choice: months for pay stubs and statements, documents for
 files dated only by year (W-2s, tax returns).
@@ -132,6 +138,8 @@ then Quartz Filter → Reduce File Size, and use the smaller copy.
   cloud icon to download them.
 - **A file isn't showing up**: check it's at the same depth as the other files in its
   folder. The faint "Not included" line under each card says why.
+- **"Save this as a PDF to use it"**: it's a Word, Pages or similar file. Export it as PDF
+  next to the original, then add the folder again.
 
 ## For developers
 
@@ -168,6 +176,9 @@ How a packet is built: the folder becomes a `Library` of options (`core/library.
 arranged `PacketItem`s are resolved into sections (`core/packet.ts`). The page reads the
 chosen files and prepares photos, then hands the bytes to a fresh sealed worker
 (`browser/packetClient.ts`), which assembles the PDF (`pdf/buildPacket.ts`) and returns it.
+
+The "Details" link next to the local-only notice points to the security page of the
+repository named in `package.json` (`repository.url`). Update it if you fork the project.
 
 ### Ground rules for contributions
 

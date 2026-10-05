@@ -1,4 +1,4 @@
-import { degrees, PDFDocument, StandardFonts, type PDFPage } from 'pdf-lib';
+import { degrees, PDFDocument, StandardFonts, type PDFFont, type PDFPage } from 'pdf-lib';
 import { UserFacingError } from '../core/errors';
 import type { DocumentKind } from '../core/fileTypes';
 import { drawCover, planCover, type ContentsEntry, type CoverDetails } from './cover';
@@ -7,12 +7,13 @@ import { fitImage, pageSizeForImage } from './geometry';
 import type { PreparedImage } from './images';
 import { addOutline, addPageLink } from './navigation';
 import { makeTextSanitizer } from './text';
+import { drawTextPages, paginate, TEXT_LAYOUT, wrapText } from './textPages';
 
 export interface PacketDocument {
-  /** Shown in error messages, e.g. "Pay Stubs/Noah/2026-09-18.pdf". */
+  /** Shown in error messages, e.g. "Pay Stubs/Alex/2026-09-18.pdf". */
   readonly label: string;
   readonly kind: DocumentKind;
-  /** PDF bytes, or an image already converted to JPEG/PNG. */
+  /** PDF bytes, UTF-8 text, or an image already converted to JPEG/PNG. */
   readonly bytes: Uint8Array;
   readonly image?: Omit<PreparedImage, 'bytes'>;
 }
@@ -32,10 +33,18 @@ export type ProgressListener = (done: number, total: number) => void;
 
 const IMAGE_MARGIN = 36;
 const PRODUCER = 'Apartment Packet Builder';
+const MAX_TEXT_BYTES = 512 * 1024;
 
 type LoadedDocument =
   | { readonly kind: 'pdf'; readonly pdf: PDFDocument; readonly pageCount: number }
-  | { readonly kind: 'image'; readonly bytes: Uint8Array; readonly image: Omit<PreparedImage, 'bytes'> };
+  | { readonly kind: 'image'; readonly bytes: Uint8Array; readonly image: Omit<PreparedImage, 'bytes'> }
+  | { readonly kind: 'text'; readonly pages: readonly string[][] };
+
+interface Fonts {
+  readonly regular: PDFFont;
+  readonly bold: PDFFont;
+  readonly sanitize: (text: string) => string;
+}
 
 /**
  * Assembles the packet: cover with contents, then every section's pages in
@@ -52,12 +61,20 @@ export async function buildPacket(
   const total = sections.reduce((sum, section) => sum + section.documents.length, 0) + 1;
   let done = 0;
 
+  const doc = await PDFDocument.create();
+  doc.setTitle(cover.address.trim() ? `Rental Application – ${cover.address.trim()}` : 'Rental Application');
+  doc.setCreator(PRODUCER);
+  doc.setProducer(PRODUCER);
+  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const fonts: Fonts = { regular, bold, sanitize: makeTextSanitizer(regular) };
+
   const problems: string[] = [];
   const loaded: LoadedDocument[][] = [];
   for (const section of sections) {
     const list: LoadedDocument[] = [];
     for (const document of section.documents) {
-      const result = await loadDocument(document);
+      const result = await loadDocument(document, fonts);
       if (typeof result === 'string') problems.push(`${document.label}: ${result}`);
       else list.push(result);
       onProgress(++done, total);
@@ -71,29 +88,25 @@ export async function buildPacket(
     );
   }
 
-  const doc = await PDFDocument.create();
-  doc.setTitle(cover.address.trim() ? `Rental Application – ${cover.address.trim()}` : 'Rental Application');
-  doc.setCreator(PRODUCER);
-  doc.setProducer(PRODUCER);
-
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const sanitize = makeTextSanitizer(regular);
-
   const layout = planCover(cover, sections.length);
   let nextPage = layout.pageCount + 1;
   const entries: ContentsEntry[] = sections.map((section, i) => {
     const entry = { title: section.title, description: section.description, pageNumber: nextPage };
-    nextPage += (loaded[i] ?? []).reduce((sum, item) => sum + (item.kind === 'pdf' ? item.pageCount : 1), 0);
+    nextPage += (loaded[i] ?? []).reduce((sum, item) => sum + pagesOf(item), 0);
     return entry;
   });
-  const { entryRows } = drawCover(doc, layout, cover, entries, { regular, bold, sanitize });
+  const { entryRows } = drawCover(doc, layout, cover, entries, fonts);
 
   const sectionStarts: PDFPage[] = [];
   for (const items of loaded) {
     let first: PDFPage | undefined;
     for (const item of items) {
-      const added = item.kind === 'pdf' ? await appendPdf(doc, item.pdf) : await appendImage(doc, item);
+      const added =
+        item.kind === 'pdf'
+          ? await appendPdf(doc, item.pdf)
+          : item.kind === 'text'
+            ? drawTextPages(doc, regular, item.pages)
+            : await appendImage(doc, item);
       first ??= added;
     }
     if (first) sectionStarts.push(first);
@@ -110,14 +123,18 @@ export async function buildPacket(
       return page ? [{ title: section.title, page }] : [];
     }),
   );
-  stampFooters(doc, regular, sanitize(cover.footerText));
+  stampFooters(doc, regular, fonts.sanitize(cover.footerText));
 
   const bytes = await doc.save({ useObjectStreams: true });
   onProgress(total, total);
   return { bytes, pageCount: doc.getPageCount() };
 }
 
-async function loadDocument(document: PacketDocument): Promise<LoadedDocument | string> {
+const pagesOf = (item: LoadedDocument): number =>
+  item.kind === 'pdf' ? item.pageCount : item.kind === 'text' ? item.pages.length : 1;
+
+async function loadDocument(document: PacketDocument, fonts: Fonts): Promise<LoadedDocument | string> {
+  if (document.kind === 'text') return loadText(document.bytes, fonts);
   if (document.kind === 'image') {
     if (!document.image) return 'the photo wasn’t prepared.';
     return { kind: 'image', bytes: document.bytes, image: document.image };
@@ -135,6 +152,20 @@ async function loadDocument(document: PacketDocument): Promise<LoadedDocument | 
   }
   const pageCount = pdf.getPageCount();
   return pageCount > 0 ? { kind: 'pdf', pdf, pageCount } : 'the PDF has no pages.';
+}
+
+function loadText(bytes: Uint8Array, fonts: Fonts): LoadedDocument | string {
+  if (bytes.byteLength > MAX_TEXT_BYTES) return 'the text file is too long for the packet. Save it as a PDF instead.';
+  // Sanitize line by line: the sanitizer flattens line breaks.
+  const text = new TextDecoder('utf-8')
+    .decode(bytes)
+    .split(/\r\n|\r|\n/)
+    .map((line) => fonts.sanitize(line.replace(/\t/g, '    ')))
+    .join('\n')
+    .trim();
+  if (!text) return 'the text file is empty.';
+  const width = 612 - TEXT_LAYOUT.margin * 2;
+  return { kind: 'text', pages: paginate(wrapText(text, fonts.regular, TEXT_LAYOUT.size, width)) };
 }
 
 async function appendPdf(doc: PDFDocument, source: PDFDocument): Promise<PDFPage> {

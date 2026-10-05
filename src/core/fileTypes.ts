@@ -1,4 +1,4 @@
-export type DocumentKind = 'pdf' | 'image';
+export type DocumentKind = 'pdf' | 'image' | 'text';
 
 const KIND_BY_EXTENSION: Readonly<Record<string, DocumentKind>> = {
   pdf: 'pdf',
@@ -8,6 +8,25 @@ const KIND_BY_EXTENSION: Readonly<Record<string, DocumentKind>> = {
   heic: 'image',
   heif: 'image',
   webp: 'image',
+  txt: 'text',
+};
+
+/**
+ * Documents the app can't lay out faithfully, with how to save them as PDF.
+ * (Word and Pages files can only be rendered properly by their own apps.)
+ */
+const EXPORT_STEPS: Readonly<Record<string, string>> = {
+  pages: 'in Pages, choose File → Export To → PDF',
+  numbers: 'in Numbers, choose File → Export To → PDF',
+  key: 'in Keynote, choose File → Export To → PDF',
+  doc: 'in Word, choose File → Save As and pick PDF',
+  docx: 'in Word, choose File → Save As and pick PDF',
+  xls: 'in Excel, choose File → Save As and pick PDF',
+  xlsx: 'in Excel, choose File → Save As and pick PDF',
+  ppt: 'in PowerPoint, choose File → Save As and pick PDF',
+  pptx: 'in PowerPoint, choose File → Save As and pick PDF',
+  rtf: 'in TextEdit, choose File → Export as PDF',
+  odt: 'choose File → Export as PDF in the app that made it',
 };
 
 /** File names the operating system creates that should never be shown. */
@@ -28,9 +47,12 @@ export function documentKindOf(fileName: string): DocumentKind | null {
   return KIND_BY_EXTENSION[extensionOf(fileName)] ?? null;
 }
 
+/** How to turn a Word/Pages/… file into a PDF, or null for other files. */
+export function exportStepsFor(fileName: string): string | null {
+  return EXPORT_STEPS[extensionOf(fileName)] ?? null;
+}
+
 /** Hidden and system files (".DS_Store", "._photo.jpg", "Thumbs.db", …). */
 export function isHiddenName(name: string): boolean {
   return name.startsWith('.') || name.startsWith('~$') || SYSTEM_NAMES.has(name.toLowerCase());
 }
-
-export const SUPPORTED_EXTENSIONS: readonly string[] = Object.keys(KIND_BY_EXTENSION);

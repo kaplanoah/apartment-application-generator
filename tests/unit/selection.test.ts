@@ -4,16 +4,16 @@ import { selectDocuments } from '../../src/core/selection';
 import { folderOf, TODAY } from '../support/library';
 
 const STUBS = folderOf([
-  'Pay Stubs/Noah/2026-10-02.pdf',
-  'Pay Stubs/Noah/2026-09-18.pdf',
-  'Pay Stubs/Noah/2026-09-04.pdf',
-  'Pay Stubs/Noah/2026-08-21.pdf',
-  'Pay Stubs/Noah/2026-08-07.pdf',
-  'Pay Stubs/Noah/2026-07-24.pdf',
-  'Pay Stubs/Anna/2026-09-30.pdf',
-  'Pay Stubs/Anna/2026-08-31.pdf',
-  'Pay Stubs/Anna/2026-07-31.pdf',
-  'Pay Stubs/Anna/notes.pdf',
+  'Pay Stubs/Alex/2026-10-02.pdf',
+  'Pay Stubs/Alex/2026-09-18.pdf',
+  'Pay Stubs/Alex/2026-09-04.pdf',
+  'Pay Stubs/Alex/2026-08-21.pdf',
+  'Pay Stubs/Alex/2026-08-07.pdf',
+  'Pay Stubs/Alex/2026-07-24.pdf',
+  'Pay Stubs/Jordan/2026-09-30.pdf',
+  'Pay Stubs/Jordan/2026-08-31.pdf',
+  'Pay Stubs/Jordan/2026-07-31.pdf',
+  'Pay Stubs/Jordan/notes.pdf',
 ]);
 const names = (docs: readonly { path: string }[]) => docs.map((d) => d.path);
 
@@ -42,21 +42,21 @@ describe('selectDocuments', () => {
       TODAY,
     );
     expect(names(included)).toEqual([
-      'Anna/2026-09-30.pdf',
-      'Anna/2026-08-31.pdf',
-      'Noah/2026-09-18.pdf',
-      'Noah/2026-09-04.pdf',
-      'Noah/2026-08-21.pdf',
-      'Noah/2026-08-07.pdf',
+      'Alex/2026-09-18.pdf',
+      'Alex/2026-09-04.pdf',
+      'Alex/2026-08-21.pdf',
+      'Alex/2026-08-07.pdf',
+      'Jordan/2026-09-30.pdf',
+      'Jordan/2026-08-31.pdf',
     ]);
-    expect(names(undated)).toEqual(['Anna/notes.pdf']);
+    expect(names(undated)).toEqual(['Jordan/notes.pdf']);
   });
 
   it('months through today picks up this month too', () => {
     const { included } = selectDocuments(STUBS, { kind: 'months', count: 2, through: 'today' }, TODAY);
-    expect(names(included)).toContain('Noah/2026-10-02.pdf');
-    expect(names(included)).toContain('Noah/2026-08-07.pdf'); // after Aug 4
-    expect(names(included)).not.toContain('Anna/2026-07-31.pdf'); // before Aug 4
+    expect(names(included)).toContain('Alex/2026-10-02.pdf');
+    expect(names(included)).toContain('Alex/2026-08-07.pdf'); // after Aug 4
+    expect(names(included)).not.toContain('Jordan/2026-07-31.pdf'); // before Aug 4
   });
 
   it('months: a monthly or yearly file counts when any part of it overlaps', () => {
@@ -69,19 +69,19 @@ describe('selectDocuments', () => {
   it('documents: the newest N of each subfolder', () => {
     const { included, undated } = selectDocuments(STUBS, { kind: 'documents', count: 2 }, TODAY);
     expect(names(included)).toEqual([
-      'Anna/2026-09-30.pdf',
-      'Anna/2026-08-31.pdf',
-      'Noah/2026-10-02.pdf',
-      'Noah/2026-09-18.pdf',
+      'Alex/2026-10-02.pdf',
+      'Alex/2026-09-18.pdf',
+      'Jordan/2026-09-30.pdf',
+      'Jordan/2026-08-31.pdf',
     ]);
-    expect(names(undated)).toEqual(['Anna/notes.pdf']);
+    expect(names(undated)).toEqual(['Jordan/notes.pdf']);
   });
 
   it('documents: the newest N of a flat folder', () => {
-    const w2s = folderOf(['W-2s/noah_2025.pdf', 'W-2s/noah_2024.pdf', 'W-2s/noah_2023.pdf']);
+    const w2s = folderOf(['W-2s/alex_2025.pdf', 'W-2s/alex_2024.pdf', 'W-2s/alex_2023.pdf']);
     expect(names(selectDocuments(w2s, { kind: 'documents', count: 2 }, TODAY).included)).toEqual([
-      'noah_2025.pdf',
-      'noah_2024.pdf',
+      'alex_2025.pdf',
+      'alex_2024.pdf',
     ]);
   });
 

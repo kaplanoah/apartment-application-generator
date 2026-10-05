@@ -11,9 +11,9 @@ const cover: CoverDetails = {
   address: '123 Main St, Apt 4B',
   applicants: [
     {
-      name: 'Noah Example',
+      name: 'Alex Sample',
       details: [
-        { label: 'Email', value: 'noah@example.com' },
+        { label: 'Email', value: 'alex@example.com' },
         { label: 'Phone', value: '(555) 010-2481' },
       ],
     },
@@ -68,8 +68,8 @@ describe('buildPacket', () => {
       'Rental Application',
       '123 Main St, Apt 4B',
       'Prepared Oct 4, 2026',
-      'Noah Example',
-      'noah@example.com',
+      'Alex Sample',
+      'alex@example.com',
       '(555) 010-2481',
       'Zoë Lukasz ?',
       'Current address: 88 Elm St',

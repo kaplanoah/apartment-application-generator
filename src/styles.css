@@ -11,6 +11,7 @@
   --accent-ink: #ffffff;
   --accent-soft: #dce4f2;
   --folder: #e2ae48;
+  --file: #8f1d1d;
   --good: #2b7a4b;
   --good-bg: #ddf0e3;
   --warn: #8a5a10;
@@ -20,7 +21,8 @@
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
   --font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  --radius: 8px;
+  --radius: 5px;
+  --radius-lg: 7px;
   color-scheme: light;
 }
 
@@ -37,6 +39,7 @@
     --accent-ink: #0e1420;
     --accent-soft: #24324b;
     --folder: #d6a142;
+    --file: #e0736b;
     --good: #6fc493;
     --good-bg: #183526;
     --warn: #e3b160;
@@ -141,15 +144,21 @@ select {
 }
 
 .local-only {
-  background: var(--good-bg);
-  color: var(--ink);
-  border-radius: var(--radius);
-  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
   font-size: 0.92rem;
 }
 
-.local-only strong {
+.local-only a {
+  color: var(--accent);
+}
+
+.local-only .icon {
   color: var(--good);
+  width: 16px;
+  height: 16px;
 }
 
 /* Steps */
@@ -162,7 +171,7 @@ main {
 .step {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 18px 20px 20px;
   display: flex;
   flex-direction: column;
@@ -170,18 +179,36 @@ main {
 }
 
 .step-num {
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   width: 26px;
   height: 26px;
   border-radius: 50%;
   background: var(--accent);
   color: var(--accent-ink);
-  font-size: 0.85rem;
-  font-weight: 700;
+  font: 700 0.85rem/1 var(--font);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Step 1 */
+.footer-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.footer-preview {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  overflow-wrap: anywhere;
+}
+
 .fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -283,7 +310,7 @@ main {
   margin: 0;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   overflow-x: auto;
   white-space: pre;
@@ -292,7 +319,7 @@ main {
 /* Step 2 */
 .dropzone {
   border: 2px dashed var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 26px 16px;
   text-align: center;
   display: flex;
@@ -365,7 +392,7 @@ main {
   gap: 8px;
   padding: 12px;
   background: var(--surface-2);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   min-height: 56px;
   align-items: center;
 }
@@ -387,35 +414,38 @@ main {
 }
 
 .icon {
-  display: inline-block;
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
-  position: relative;
 }
 
-.icon.folder {
-  width: 15px;
-  height: 11px;
-  margin-top: 2px;
-  background: var(--folder);
-  border-radius: 1px 2px 2px 2px;
+.shape-folder {
+  fill: var(--folder);
 }
 
-.icon.folder::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: -3px;
-  width: 6px;
-  height: 3px;
-  background: var(--folder);
-  border-radius: 2px 2px 0 0;
+.shape-file {
+  fill: var(--file);
 }
 
-.icon.file {
-  width: 10px;
-  height: 13px;
-  border: 1.5px solid var(--muted);
-  border-radius: 1.5px;
+.shape-cut {
+  fill: var(--surface);
+  opacity: 0.6;
+}
+
+.shape-line {
+  fill: none;
+  stroke: var(--surface);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+
+.shape-stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* Step 3: packet list (Numerals) */
@@ -431,7 +461,7 @@ main {
 
 .packet.empty {
   border: 2px dashed var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   display: grid;
   place-items: center;
   padding: 20px;
@@ -457,7 +487,7 @@ main {
   font: 700 1.5rem/1 var(--font-display);
   color: var(--faint);
   text-align: right;
-  padding-top: 12px;
+  padding-top: 13px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -470,12 +500,12 @@ main {
 
 .card {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
-  padding: 11px 13px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   cursor: grab;
 }
@@ -493,74 +523,94 @@ main {
   overflow-wrap: anywhere;
 }
 
-.spacer {
-  flex: 1;
-}
-
-.count {
-  font: 0.75rem var(--font-mono);
-  color: var(--faint);
-  white-space: nowrap;
-}
-
-.remove {
-  border: none;
-  background: transparent;
-  color: var(--faint);
-  font-size: 1.1rem;
-  line-height: 1;
-  padding: 2px 6px;
-  border-radius: 4px;
-  cursor: pointer;
-  opacity: 0;
-}
-
-.card:hover .remove,
-.card:focus-within .remove {
-  opacity: 1;
-}
-
-.remove:hover {
-  color: var(--ink);
-  background: var(--surface-2);
-}
-
 .range {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px 8px;
-  font-size: 0.9rem;
-  color: var(--muted);
+  gap: 6px 10px;
 }
 
 .range-main {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   white-space: nowrap;
+  font-size: 1rem;
 }
 
-.range select {
-  font-size: 0.88rem;
+/* Native selects restyled so they share one height in every browser. */
+.select {
+  position: relative;
+  display: inline-flex;
+}
+
+.select select {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  font: inherit;
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 2px 4px;
+  border-radius: var(--radius);
   cursor: pointer;
 }
 
-.range select.anchor {
+.select::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-right: 1.6px solid var(--muted);
+  border-bottom: 1.6px solid var(--muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+
+.select.large select {
+  height: 36px;
+  padding: 0 32px 0 12px;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.select.small select {
+  height: 28px;
+  padding: 0 24px 0 4px;
+  font-size: 0.8rem;
+  color: var(--faint);
   border-color: transparent;
   background: transparent;
-  color: var(--faint);
-  font-size: 0.8rem;
+}
+
+.select.small::after {
+  right: 9px;
+  width: 5px;
+  height: 5px;
+  border-color: var(--faint);
 }
 
 .range-all {
-  font-size: 0.85rem;
-  color: var(--faint);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.count.empty {
+  color: var(--warn);
 }
 
 .paths {
@@ -575,10 +625,6 @@ main {
 
 .paths.skipped {
   font-style: italic;
-}
-
-.paths.empty {
-  color: var(--warn);
 }
 
 /* Step 4 */

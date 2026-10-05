@@ -123,13 +123,21 @@ export function withExifOrientation(jpeg: Uint8Array, orientation: number, littl
 }
 
 export const SAMPLE_CONTACT_INFO = `# Sample contact info. Replace with your own.
-Name: Noah Example
-Email: noah@example.com
+Name: Alex Sample
+Email: alex@example.com
 Phone: (555) 010-2481
 
-Name: Anna Example
-Email: anna@example.com
+Name: Jordan Sample
+Email: jordan@example.com
 Phone: (555) 010-7730
+`;
+
+export const SAMPLE_NOTE = `Hello,
+
+Thank you for considering our application. We are both non-smokers, we have one small dog (Biscuit, vaccination record attached), and we are flexible on the move-in date.
+
+Best,
+Alex & Jordan
 `;
 
 /** Every file of the example folder, by path relative to the folder. */
@@ -140,35 +148,38 @@ export async function sampleFolderFiles(): Promise<Map<string, Uint8Array>> {
 
   files.set('contact-info.txt', new TextEncoder().encode(SAMPLE_CONTACT_INFO));
   await add('Cover Letter.pdf', 'Cover Letter', ['To whom it may concern,', 'We would love to rent your apartment.']);
-  await add('Landlord Reference.pdf', 'Landlord Reference', ['Noah and Anna were wonderful tenants.']);
-  files.set('ID/noah-id.jpg', sampleIdJpeg());
-  await add('ID/anna-passport.pdf', 'Passport (sample)', ['Anna Example']);
-  await add('Employment Letters/Noah/offer-letter.pdf', 'Offer Letter', ['Noah Example — Example Corp']);
-  await add('Employment Letters/Anna/employment-verification.pdf', 'Employment Verification', [
-    'Anna Example — Sample LLC',
+  // The original the PDF was exported from: skipped quietly because the PDF sits beside it.
+  files.set('Cover Letter.pages', new Uint8Array([0x50, 0x4b, 0x03, 0x04]));
+  files.set('Note to Landlord.txt', new TextEncoder().encode(SAMPLE_NOTE));
+  await add('Landlord Reference.pdf', 'Landlord Reference', ['Alex and Jordan were wonderful tenants.']);
+  files.set('ID/alex-id.jpg', sampleIdJpeg());
+  await add('ID/jordan-passport.pdf', 'Passport (sample)', ['Jordan Sample']);
+  await add('Employment Letters/Alex/offer-letter.pdf', 'Offer Letter', ['Alex Sample — Example Corp']);
+  await add('Employment Letters/Jordan/employment-verification.pdf', 'Employment Verification', [
+    'Jordan Sample — Sample LLC',
   ]);
 
   for (const date of ['2026-07-24', '2026-08-07', '2026-08-21', '2026-09-04', '2026-09-18', '2026-10-02']) {
-    await add(`Pay Stubs/Noah/${date}.pdf`, `Pay Stub ${date}`, ['Noah Example', 'Gross pay: $0.00 (sample)']);
+    await add(`Pay Stubs/Alex/${date}.pdf`, `Pay Stub ${date}`, ['Alex Sample', 'Gross pay: $0.00 (sample)']);
   }
   for (const date of ['2026-07-31', '2026-08-15', '2026-08-31', '2026-09-15', '2026-09-30']) {
-    await add(`Pay Stubs/Anna/anna_${date}.pdf`, `Pay Stub ${date}`, ['Anna Example', 'Net pay: $0.00 (sample)']);
+    await add(`Pay Stubs/Jordan/jordan_${date}.pdf`, `Pay Stub ${date}`, ['Jordan Sample', 'Net pay: $0.00 (sample)']);
   }
-  for (const year of ['2023', '2024', '2025']) await add(`W-2s/Noah/w2_${year}.pdf`, `W-2 ${year}`, ['Noah Example']);
-  for (const year of ['2024', '2025']) await add(`W-2s/Anna/w2_${year}.pdf`, `W-2 ${year}`, ['Anna Example']);
+  for (const year of ['2023', '2024', '2025']) await add(`W-2s/Alex/w2_${year}.pdf`, `W-2 ${year}`, ['Alex Sample']);
+  for (const year of ['2024', '2025']) await add(`W-2s/Jordan/w2_${year}.pdf`, `W-2 ${year}`, ['Jordan Sample']);
   for (const year of ['2024', '2025']) {
-    await add(`Tax Returns/Noah/noah_${year}_1040.pdf`, `Form 1040 ${year}`, ['Noah Example'], { pages: 2 });
-    await add(`Tax Returns/Anna/anna_${year}_1040.pdf`, `Form 1040 ${year}`, ['Anna Example'], { pages: 2 });
+    await add(`Tax Returns/Alex/alex_${year}_1040.pdf`, `Form 1040 ${year}`, ['Alex Sample'], { pages: 2 });
+    await add(`Tax Returns/Jordan/jordan_${year}_1040.pdf`, `Form 1040 ${year}`, ['Jordan Sample'], { pages: 2 });
   }
   for (const month of ['2026-06', '2026-07', '2026-08', '2026-09']) {
-    await add(`Bank Statements/Chase/${month}.pdf`, `Checking Statement ${month}`, ['Noah Example'], { pages: 2 });
+    await add(`Bank Statements/Chase/${month}.pdf`, `Checking Statement ${month}`, ['Alex Sample'], { pages: 2 });
   }
   for (const month of ['2026-07', '2026-08', '2026-09']) {
-    await add(`Bank Statements/Ally/${month}.pdf`, `Savings Statement ${month}`, ['Anna Example']);
+    await add(`Bank Statements/Ally/${month}.pdf`, `Savings Statement ${month}`, ['Jordan Sample']);
   }
   await add('Bank Statements/account-summary.pdf', 'Account Summary', ['Sits one level up, so it is skipped.']);
   for (const month of ['2026-06', '2026-07', '2026-08', '2026-09']) {
-    await add(`Utility Bills/coned_${month}.pdf`, `Electric Bill ${month}`, ['Noah & Anna Example']);
+    await add(`Utility Bills/coned_${month}.pdf`, `Electric Bill ${month}`, ['Alex & Jordan Sample']);
   }
   await add('Utility Bills/welcome-letter.pdf', 'Welcome Letter', [
     'Undated, so it is left out when a date range is on.',

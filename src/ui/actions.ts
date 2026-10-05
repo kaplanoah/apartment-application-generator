@@ -2,13 +2,13 @@ import { parseContactInfo } from '../core/contactInfo';
 import { UserFacingError } from '../core/errors';
 import { buildLibrary, type LibraryDocument } from '../core/library';
 import { planPacket } from '../core/packet';
-import { packetFileName, suggestedFooter } from '../core/naming';
+import { packetFileName } from '../core/naming';
 import { getSizePreset, type SizePreset } from '../core/sizePresets';
 import type { PickedFolder } from '../browser/readFolder';
 import type { BuiltPacket, PacketDocument, PacketSection } from '../pdf/buildPacket';
 import type { CoverDetails } from '../pdf/cover';
 import type { ImagePreparer } from '../pdf/images';
-import type { AppState, ContactState, Notice } from './state';
+import { currentFooter, type AppState, type ContactState, type Notice } from './state';
 import type { Store } from './store';
 
 /** Everything that touches the browser, injected so actions can be tested. */
@@ -25,14 +25,7 @@ export interface Services {
 const MAX_CONTACT_FILE_BYTES = 64 * 1024;
 
 export function setAddress(store: Store<AppState>, address: string): void {
-  store.update((state) => ({
-    address,
-    footer: state.footerEdited ? state.footer : suggestedFooter(address, state.today),
-  }));
-}
-
-export function setFooter(store: Store<AppState>, footer: string): void {
-  store.update({ footer, footerEdited: true });
+  store.update({ address });
 }
 
 /** Loads a picked or dropped folder, keeping any arrangement that still applies. */
@@ -44,7 +37,9 @@ export async function loadFolder(store: Store<AppState>, picking: Promise<Picked
     if (library.options.length === 0) {
       throw new UserFacingError(
         `No usable documents in “${picked.name}”. Put PDFs or photos (JPG, PNG, HEIC) in it, either loose or in folders.`,
-        library.ignored.map((item) => item.path),
+        library.ignored.map((item) =>
+          item.exportSteps ? `${item.path}: save it as a PDF first (${item.exportSteps}).` : item.path,
+        ),
       );
     }
     const contact = await readContactFile(library.contactFile);
@@ -117,7 +112,7 @@ export async function generate(store: Store<AppState>, services: Services): Prom
     const cover: CoverDetails = {
       address: state.address,
       applicants: state.folder.contact.status === 'loaded' ? state.folder.contact.info.applicants : [],
-      footerText: state.footer,
+      footerText: currentFooter(state),
       preparedOn: state.today,
     };
 
@@ -151,7 +146,7 @@ async function readDocument(
   prepareImage: ImagePreparer,
 ): Promise<PacketDocument> {
   const bytes = new Uint8Array(await doc.file.arrayBuffer());
-  if (doc.kind === 'pdf') return { label, kind: 'pdf', bytes };
+  if (doc.kind !== 'image') return { label, kind: doc.kind, bytes };
   const image = await prepareImage(bytes, label);
   return { label, kind: 'image', bytes: image.bytes, image: { format: image.format, turn: image.turn } };
 }

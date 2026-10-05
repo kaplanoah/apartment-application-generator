@@ -7,16 +7,16 @@ describe('parseContactInfo', () => {
     expect(problems).toEqual([]);
     expect(applicants).toEqual([
       {
-        name: 'Noah Example',
+        name: 'Alex Sample',
         details: [
-          { label: 'Email', value: 'noah@example.com' },
+          { label: 'Email', value: 'alex@example.com' },
           { label: 'Phone', value: '(555) 010-2481' },
         ],
       },
       {
-        name: 'Anna Example',
+        name: 'Jordan Sample',
         details: [
-          { label: 'Email', value: 'anna@example.com' },
+          { label: 'Email', value: 'jordan@example.com' },
           { label: 'Phone', value: '(555) 010-7730' },
         ],
       },
@@ -24,10 +24,10 @@ describe('parseContactInfo', () => {
   });
 
   it('is forgiving about spacing, case, comments, BOM and line endings', () => {
-    const text = '﻿# our info\r\n  name :  Noah  \r\nEMAIL: n@x.com\r\n\r\n\r\nNAME: Anna\rphone: 1';
+    const text = '﻿# our info\r\n  name :  Alex  \r\nEMAIL: n@x.com\r\n\r\n\r\nNAME: Jordan\rphone: 1';
     const { applicants, problems } = parseContactInfo(text);
     expect(problems).toEqual([]);
-    expect(applicants.map((a) => a.name)).toEqual(['Noah', 'Anna']);
+    expect(applicants.map((a) => a.name)).toEqual(['Alex', 'Jordan']);
     expect(applicants[1]?.details).toEqual([{ label: 'phone', value: '1' }]);
   });
 

@@ -35,7 +35,7 @@ export function rangeControl(
     (value) => onChange(build(value as Unit, count, through)),
     `${focusKey}:unit`,
   );
-  if (range.kind === 'all') return h('span', { class: 'range' }, unitSelect);
+  if (range.kind === 'all') return h('span', { class: 'range' }, styled(unitSelect));
 
   const numbers: [string, string][] = [];
   for (let n = MIN_COUNT; n <= MAX_COUNT; n++) numbers.push([String(n), String(n)]);
@@ -58,11 +58,15 @@ export function rangeControl(
           range.through,
           (value) => onChange(build('months', range.count, value as typeof through)),
           `${focusKey}:anchor`,
-          'anchor',
         )
       : null;
 
-  return h('span', { class: 'range' }, h('span', { class: 'range-main' }, 'Last', countSelect, unitSelect), anchor);
+  return h(
+    'span',
+    { class: 'range' },
+    h('span', { class: 'range-main' }, 'Last', styled(countSelect), styled(unitSelect)),
+    anchor && styled(anchor, 'small'),
+  );
 }
 
 function select(
@@ -82,3 +86,7 @@ function select(
   element.addEventListener('change', () => onChange(element.value));
   return element;
 }
+
+/** Wraps a select so it can be styled with a consistent size and chevron. */
+const styled = (select: HTMLSelectElement, size: 'large' | 'small' = 'large'): HTMLElement =>
+  h('span', { class: `select ${size}` }, select);

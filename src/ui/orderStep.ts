@@ -1,6 +1,7 @@
 import { findOption, moveItem, newPacketItem, type PacketItem } from '../core/packet';
 import type { LibraryOption } from '../core/library';
 import { h, preservingFocus, replaceChildren } from './dom';
+import { optionIcon } from './icons';
 import { packetCard } from './packetCard';
 import type { AppState } from './state';
 import type { Store } from './store';
@@ -112,8 +113,8 @@ export function createOrderStep(store: Store<AppState>) {
         const tile = h(
           'button',
           { type: 'button', class: 'tile', draggable: 'true', 'aria-label': `Add ${option.title}` },
-          h('span', { class: `icon ${option.kind}`, 'aria-hidden': 'true' }),
           option.title,
+          optionIcon(option),
         );
         tile.addEventListener('click', () =>
           insertAt(store.get().packet.length, { from: 'pool', optionId: option.id }),
@@ -150,7 +151,6 @@ export function createOrderStep(store: Store<AppState>) {
         const update = (packet: readonly PacketItem[]) => setPacket(packet);
         const row = packetCard(option, item, index, state.today, {
           onRangeChange: (range) => update(state.packet.map((it, i) => (i === index ? { ...it, range } : it))),
-          onRemove: () => update(state.packet.filter((_, i) => i !== index)),
         });
         const card = row.querySelector<HTMLElement>('.card');
         card?.addEventListener('dragstart', (event) => {
@@ -163,7 +163,7 @@ export function createOrderStep(store: Store<AppState>) {
         card?.addEventListener('dragend', endDrag);
         // Controls inside a draggable card must stay usable.
         card?.addEventListener('pointerdown', (event) => {
-          card.draggable = !(event.target as Element).closest('select, button');
+          card.draggable = !(event.target as Element).closest('select');
         });
         card?.addEventListener('keydown', (event) => {
           if (event.target !== card) return;

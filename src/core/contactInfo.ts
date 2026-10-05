@@ -6,12 +6,12 @@
  */
 export const CONTACT_FILE_NAME = 'contact-info.txt';
 
-export const CONTACT_FILE_EXAMPLE = `Name: Noah Example
-Email: noah@example.com
+export const CONTACT_FILE_EXAMPLE = `Name: Alex Sample
+Email: alex@example.com
 Phone: (555) 010-2481
 
-Name: Anna Example
-Email: anna@example.com
+Name: Jordan Sample
+Email: jordan@example.com
 Phone: (555) 010-7730`;
 
 export interface ContactDetail {
@@ -87,7 +87,7 @@ export function parseContactInfo(text: string): ContactInfo {
   return { applicants, problems };
 }
 
-/** How a detail line appears on the cover: "noah@example.com" or "Current address: …". */
+/** How a detail line appears on the cover: "alex@example.com" or "Current address: …". */
 export function formatContactDetail(detail: ContactDetail): string {
   return VALUE_ONLY_LABELS.has(detail.label.toLowerCase()) ? detail.value : `${detail.label}: ${detail.value}`;
 }

@@ -1,6 +1,6 @@
 import { CONTACT_FILE_NAME } from './contactInfo';
 import { parseFileDate, type FileDate } from './fileDate';
-import { documentKindOf, isHiddenName, stripExtension, type DocumentKind } from './fileTypes';
+import { documentKindOf, exportStepsFor, isHiddenName, stripExtension, type DocumentKind } from './fileTypes';
 
 /** A file found in the chosen folder. `path` is relative to that folder. */
 export interface SourceEntry<F> {
@@ -9,7 +9,7 @@ export interface SourceEntry<F> {
 }
 
 export interface LibraryDocument<F> {
-  /** Path inside its top-level option, e.g. "Noah/2026-09-18.pdf". */
+  /** Path inside its top-level option, e.g. "Alex/2026-09-18.pdf". */
   readonly path: string;
   /** Subfolder path inside the option, "" when the file sits directly in it. */
   readonly subfolder: string;
@@ -19,11 +19,13 @@ export interface LibraryDocument<F> {
   readonly file: F;
 }
 
-export type SkipReason = 'different-level' | 'unsupported-type';
+export type SkipReason = 'different-level' | 'unsupported-type' | 'needs-pdf';
 
 export interface SkippedFile {
   readonly path: string;
   readonly reason: SkipReason;
+  /** For 'needs-pdf': how to save the file as a PDF. */
+  readonly exportSteps?: string;
 }
 
 export interface FolderOption<F> {
@@ -48,7 +50,9 @@ export type LibraryOption<F> = FolderOption<F> | FileOption<F>;
 
 export interface IgnoredItem {
   readonly path: string;
-  readonly reason: 'unsupported-type' | 'no-usable-files';
+  readonly reason: 'unsupported-type' | 'no-usable-files' | 'needs-pdf';
+  /** For 'needs-pdf': how to save the file as a PDF. */
+  readonly exportSteps?: string;
 }
 
 export interface Library<F> {
@@ -69,7 +73,9 @@ export const compareNames = (a: string, b: string): number => collator.compare(a
  * - every top-level folder is an option made of the files at its *deepest*
  *   level only. Files at any other depth are skipped (and reported), so one
  *   option never mixes nesting levels;
- * - hidden/system files are ignored, and contact-info.txt is set aside.
+ * - hidden/system files are ignored, and contact-info.txt is set aside;
+ * - Word, Pages and similar files are reported with how to save them as PDF,
+ *   unless a PDF with the same name already sits next to them.
  */
 export function buildLibrary<F>(entries: readonly SourceEntry<F>[]): Library<F> {
   const options: LibraryOption<F>[] = [];
@@ -77,15 +83,21 @@ export function buildLibrary<F>(entries: readonly SourceEntry<F>[]): Library<F> 
   const folders = new Map<string, SourceEntry<F>[]>();
   let contactFile: F | null = null;
 
-  for (const entry of entries) {
-    if (entry.path.length === 0 || entry.path.some(isHiddenName)) continue;
+  const visible = entries.filter((entry) => entry.path.length > 0 && !entry.path.some(isHiddenName));
+  const exported = exportedPdfKeys(visible);
+
+  for (const entry of visible) {
+    if (hasExportedCopy(entry.path, exported)) continue;
     const [top, ...rest] = entry.path as [string, ...string[]];
 
     if (rest.length === 0) {
+      const exportSteps = exportStepsFor(top);
       if (top.toLowerCase() === CONTACT_FILE_NAME) {
         contactFile = entry.file;
       } else if (documentKindOf(top)) {
         options.push({ kind: 'file', id: top, title: stripExtension(top), document: toDocument([top], entry.file) });
+      } else if (exportSteps) {
+        ignored.push({ path: top, reason: 'needs-pdf', exportSteps });
       } else {
         ignored.push({ path: top, reason: 'unsupported-type' });
       }
@@ -117,7 +129,10 @@ function buildFolderOption<F>(name: string, entries: readonly SourceEntry<F>[]):
 
   for (const entry of entries) {
     const path = entry.path.join('/');
-    if (!documentKindOf(entry.path.at(-1) ?? '')) skipped.push({ path, reason: 'unsupported-type' });
+    const name = entry.path.at(-1) ?? '';
+    const exportSteps = exportStepsFor(name);
+    if (exportSteps) skipped.push({ path, reason: 'needs-pdf', exportSteps });
+    else if (!documentKindOf(name)) skipped.push({ path, reason: 'unsupported-type' });
     else if (entry.path.length !== deepest) skipped.push({ path, reason: 'different-level' });
     else documents.push(toDocument(entry.path, entry.file));
   }
@@ -134,6 +149,24 @@ function buildFolderOption<F>(name: string, entries: readonly SourceEntry<F>[]):
     hasSubfolders: documents.some((doc) => doc.subfolder !== ''),
   };
 }
+
+/** "dir/name" (lower-case, no extension) of every PDF, to spot exported copies. */
+function exportedPdfKeys<F>(entries: readonly SourceEntry<F>[]): Set<string> {
+  const keys = new Set<string>();
+  for (const entry of entries) {
+    const name = entry.path.at(-1) ?? '';
+    if (documentKindOf(name) === 'pdf') keys.add(copyKey(entry.path));
+  }
+  return keys;
+}
+
+/** True for a Word/Pages/… file that already has a PDF of the same name beside it. */
+function hasExportedCopy(path: readonly string[], exported: ReadonlySet<string>): boolean {
+  return exportStepsFor(path.at(-1) ?? '') !== null && exported.has(copyKey(path));
+}
+
+const copyKey = (path: readonly string[]): string =>
+  [...path.slice(0, -1), stripExtension(path.at(-1) ?? '')].join('/').toLowerCase();
 
 function toDocument<F>(path: readonly string[], file: F): LibraryDocument<F> {
   const name = path.at(-1) ?? '';

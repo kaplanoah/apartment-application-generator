@@ -1,10 +1,10 @@
 import { CONTACT_FILE_EXAMPLE, CONTACT_FILE_NAME, formatContactDetail } from '../core/contactInfo';
-import { setAddress, setFooter } from './actions';
+import { setAddress } from './actions';
 import { h, replaceChildren } from './dom';
-import type { AppState } from './state';
+import { currentFooter, type AppState } from './state';
 import type { Store } from './store';
 
-/** Step 1: apartment address, footer, and the applicants read from the folder. */
+/** Step 1: the apartment address, the applicants from the folder, and the resulting footer. */
 export function createDetailsStep(store: Store<AppState>) {
   const address = h('input', {
     id: 'address',
@@ -15,31 +15,20 @@ export function createDetailsStep(store: Store<AppState>) {
     placeholder: '123 Main St, Apt 4B',
     oninput: () => setAddress(store, address.value),
   });
-  const footer = h('input', {
-    id: 'footer',
-    type: 'text',
-    autocomplete: 'off',
-    maxlength: 200,
-    placeholder: 'Fills in from the address',
-    oninput: () => setFooter(store, footer.value),
-  });
+  const footer = h('p', { class: 'footer-preview', id: 'footer-preview' });
   const applicants = h('div', { class: 'applicants', 'aria-live': 'polite' });
 
   const element = h(
     'section',
     { class: 'step', 'aria-labelledby': 'step-details' },
     h('h2', { id: 'step-details' }, h('span', { class: 'step-num' }, '1'), 'Your details'),
-    h(
-      'div',
-      { class: 'fields' },
-      h('label', { class: 'field', for: 'address' }, h('span', null, 'Apartment address'), address),
-      h('label', { class: 'field', for: 'footer' }, h('span', null, 'Footer on every page'), footer),
-    ),
+    h('label', { class: 'field', for: 'address' }, h('span', null, 'Apartment address'), address),
     applicants,
+    h('div', { class: 'footer-row' }, h('span', { class: 'label' }, 'Footer on every page'), footer),
   );
 
   function update(state: AppState, previous?: AppState): void {
-    if (footer.value !== state.footer && document.activeElement !== footer) footer.value = state.footer;
+    footer.textContent = currentFooter(state);
     if (previous && previous.folder === state.folder) return;
     renderApplicants(applicants, state);
   }

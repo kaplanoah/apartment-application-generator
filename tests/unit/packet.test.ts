@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { moveItem, newPacketItem, planPacket } from '../../src/core/packet';
-import { packetFileName, suggestedFooter } from '../../src/core/naming';
+import { footerText, joinNames, packetFileName } from '../../src/core/naming';
 import { DEFAULT_SIZE_PRESET, getSizePreset, SIZE_PRESETS } from '../../src/core/sizePresets';
 import { libraryOf, TODAY } from '../support/library';
 
@@ -59,9 +59,19 @@ describe('moveItem', () => {
 });
 
 describe('naming', () => {
-  it('suggests a footer from the address', () => {
-    expect(suggestedFooter(' 123 Main St, Apt 4B ', TODAY)).toBe('For 123 Main St, Apt 4B application only · Oct 2026');
-    expect(suggestedFooter('   ', TODAY)).toBe('');
+  it('builds the footer from the applicants and the address', () => {
+    expect(footerText(['Alex Sample', 'Jordan Sample'], ' 123 Main St, Apt 4B ', TODAY)).toBe(
+      'Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B only · Oct 2026',
+    );
+    expect(footerText([], '1 Elm St', TODAY)).toBe('Application for 1 Elm St only · Oct 2026');
+    expect(footerText(['Alex Sample', ' '], '', TODAY)).toBe('Alex Sample · Rental application · Oct 2026');
+  });
+
+  it('joins names naturally', () => {
+    expect(joinNames([])).toBe('');
+    expect(joinNames(['A'])).toBe('A');
+    expect(joinNames(['A', 'B'])).toBe('A & B');
+    expect(joinNames(['A', 'B', 'C'])).toBe('A, B & C');
   });
 
   it('makes a safe, readable file name', () => {

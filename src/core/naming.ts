@@ -2,10 +2,26 @@ import { formatMonthYear, toIsoDate, type CalendarDate } from './calendar';
 
 const MAX_NAME_PART = 80;
 
-/** Footer suggested from the address: "For 123 Main St #4B application only · Oct 2026". */
-export function suggestedFooter(address: string, today: CalendarDate): string {
+/**
+ * The footer printed on every page, from the applicants and the address:
+ * "Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B only · Oct 2026".
+ * Naming the people, the apartment and the month makes reuse elsewhere obvious.
+ */
+export function footerText(names: readonly string[], address: string, today: CalendarDate): string {
   const place = address.trim();
-  return place ? `For ${place} application only · ${formatMonthYear(today)}` : '';
+  return [
+    joinNames(names.map((name) => name.trim()).filter(Boolean)),
+    place ? `Application for ${place} only` : 'Rental application',
+    formatMonthYear(today),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** "A", "A & B", "A, B & C". */
+export function joinNames(names: readonly string[]): string {
+  if (names.length <= 2) return names.join(' & ');
+  return `${names.slice(0, -1).join(', ')} & ${names.at(-1)}`;
 }
 
 /** "Rental Application - 123 Main St Apt 4B - 2026-10-04.pdf", safe on any OS. */

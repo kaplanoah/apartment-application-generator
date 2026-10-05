@@ -2,6 +2,7 @@ import type { CalendarDate } from '../core/calendar';
 import type { Services } from './actions';
 import { createDetailsStep } from './detailsStep';
 import { h } from './dom';
+import { icon } from './icons';
 import { createFolderStep } from './folderStep';
 import { createGenerateStep } from './generateStep';
 import { createOrderStep } from './orderStep';
@@ -25,8 +26,13 @@ export function mountApp(root: HTMLElement, today: CalendarDate, services: Servi
       h(
         'p',
         { class: 'local-only', role: 'note' },
-        h('strong', null, 'Local only.'),
-        ' This page never connects to the internet. Your documents are read in this browser tab, and nothing is ever transferred or stored.',
+        icon('lock'),
+        h(
+          'span',
+          null,
+          'Local only: this page never connects to the internet. Nothing is transferred or stored. ',
+          h('a', { href: __SECURITY_PAGE_URL__, target: '_blank', rel: 'noopener noreferrer' }, 'Details'),
+        ),
       ),
     ),
     h('main', null, ...steps.map((step) => step.element)),

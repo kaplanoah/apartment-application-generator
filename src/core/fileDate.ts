@@ -25,10 +25,10 @@ const DATE_PATTERN =
  * Finds the first valid date in a file name. Returns null when there is none,
  * so the file counts as undated.
  *
- *   "noah_2025.pdf"          → all of 2025
+ *   "alex_2025.pdf"          → all of 2025
  *   "chase 2026-09.pdf"      → all of September 2026
  *   "2026-09-18.pdf"         → September 18, 2026
- *   "anna_2025_1040.pdf"     → all of 2025 (1040 is not a plausible year)
+ *   "jordan_2025_1040.pdf"     → all of 2025 (1040 is not a plausible year)
  */
 export function parseFileDate(fileName: string): FileDate | null {
   const base = fileName.replace(/\.[^.]*$/, '');
