@@ -1,6 +1,6 @@
 import type { CoverDetails } from '../pdf/cover';
 import type { PacketSection } from '../pdf/buildPacket';
-import type { ShrunkImage } from '../pdf/shrinkImages';
+import { MAX_SHRINK_PIXELS, type ImageSource, type ShrunkImage } from '../pdf/shrinkImages';
 
 /** Messages between the page and the sealed PDF worker. */
 export type WorkerRequest =
@@ -23,13 +23,13 @@ export interface ImageSizeLimits {
 export type WorkerResponse =
   | { readonly type: 'seal-report'; readonly exposed: readonly string[] }
   /**
-   * Asks the page to re-encode an oversized image found inside a PDF. The page's canvas makes
-   * JPEGs reliably in every browser, which a worker's OffscreenCanvas doesn't in WebKit.
+   * Asks the page to re-encode an image found inside a PDF. The page's canvas makes JPEGs
+   * reliably in every browser, which a worker's OffscreenCanvas doesn't in WebKit.
    */
   | {
       readonly type: 'shrink-image';
       readonly id: number;
-      readonly jpeg: Uint8Array;
+      readonly source: ImageSource;
       readonly maxEdge: number;
       readonly quality: number;
     }
@@ -51,6 +51,25 @@ export type WorkerResponse =
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
 
+/** Pixels must be exactly as many as their stated size, and within the size the page will draw. */
+function isImageSource(value: unknown): value is ImageSource {
+  if (typeof value !== 'object' || value === null) return false;
+  const source = value as Record<string, unknown>;
+  if (!(source.bytes instanceof Uint8Array)) return false;
+  if (source.kind === 'jpeg') return true;
+  if (source.kind !== 'pixels') return false;
+  const { width, height, channels } = source;
+  return (
+    Number.isInteger(width) &&
+    Number.isInteger(height) &&
+    (width as number) > 0 &&
+    (height as number) > 0 &&
+    (width as number) * (height as number) <= MAX_SHRINK_PIXELS &&
+    (channels === 1 || channels === 3) &&
+    source.bytes.byteLength === (width as number) * (height as number) * channels
+  );
+}
+
 /** Checks the shape of anything the worker sends before the page trusts it. */
 export function isWorkerResponse(value: unknown): value is WorkerResponse {
   if (typeof value !== 'object' || value === null) return false;
@@ -63,7 +82,7 @@ export function isWorkerResponse(value: unknown): value is WorkerResponse {
     case 'shrink-image':
       return (
         Number.isInteger(message.id) &&
-        message.jpeg instanceof Uint8Array &&
+        isImageSource(message.source) &&
         Number.isFinite(message.maxEdge) &&
         Number.isFinite(message.quality)
       );

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import {
   encryptedPdf,
   sampleFolderFiles,
@@ -22,7 +22,9 @@ let unusableFolder: string;
 let lockedFolder: string;
 let photosFolder: string;
 let statementsFolder: string;
+let losslessFolder: string;
 let bigPhotoBytes: number;
+let grainyBytes: number;
 
 test.beforeAll(async ({ browser }) => {
   workspace = await mkdtemp(join(tmpdir(), 'packet-e2e-'));
@@ -66,7 +68,37 @@ test.beforeAll(async ({ browser }) => {
     context.putImageData(pixels, 0, 0);
     return canvas.toDataURL('image/jpeg', 0.9).split(',')[1] as string;
   });
+  // A photo-like PNG: smooth shading plus grain, which lossless formats store poorly.
+  const grainyPng = await scratch.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1600;
+    canvas.height = 1000;
+    const context = canvas.getContext('2d') as CanvasRenderingContext2D;
+    const pixels = context.createImageData(canvas.width, canvas.height);
+    let seed = 7;
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      const shade = ((i / 4) % canvas.width) / 8 + (seed % 48);
+      pixels.data.set([shade, shade * 0.8, 255 - shade, 255], i);
+    }
+    context.putImageData(pixels, 0, 0);
+    return canvas.toDataURL('image/png').split(',')[1] as string;
+  });
   await scratch.close();
+  const grainy = new Uint8Array(Buffer.from(grainyPng, 'base64'));
+  grainyBytes = grainy.byteLength;
+  // Pages, Word and "Save as PDF" store pictures losslessly (Flate), as pdf-lib does with a PNG.
+  const exported = await PDFDocument.create();
+  const exportedImage = await exported.embedPng(grainy);
+  exported.addPage([612, 792]).drawImage(exportedImage, { x: 36, y: 300, width: 540, height: 338 });
+  losslessFolder = join(workspace, 'Lossless');
+  await writeFiles(
+    losslessFolder,
+    new Map([
+      ['Exported ID.pdf', await exported.save()],
+      ['Screenshot.png', grainy],
+    ]),
+  );
   const bigPlain = new Uint8Array(Buffer.from(bigPhoto, 'base64'));
   const big = withExifOrientation(bigPlain, 6);
   // A scanned ID saved as a PDF: a big photo inside, the usual reason a PDF is huge.
@@ -292,6 +324,34 @@ test('repeated images are stored once, and big packets say where the size comes 
   await expect(report).toContainText('ID:');
   await expect(report).toContainText('Repeated images and fonts are stored once, which saved');
   await expect(report).toContainText('Good to know');
+});
+
+test('losslessly stored pictures, in PDFs and PNG files, become much smaller JPEGs', async ({ page }) => {
+  test.slow(); // builds two packets from large images
+  await openApp(page);
+  await chooseFolder(page, losslessFolder);
+  await page.getByText('Smaller', { exact: true }).click();
+
+  for (const title of ['Exported ID', 'Screenshot']) {
+    await addTile(page, title);
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Generate PDF' }).click();
+    const bytes = await readFile(await (await downloadPromise).path());
+    const pdf = await PDFDocument.load(bytes);
+    const images = pdf.context
+      .enumerateIndirectObjects()
+      .map(([, object]) => object)
+      .filter(
+        (object) => object instanceof PDFRawStream && object.dict.get(PDFName.of('Subtype')) === PDFName.of('Image'),
+      )
+      .map((object) => (object as PDFRawStream).dict);
+    expect(images.map((dict) => dict.get(PDFName.of('Filter')))).toEqual([PDFName.of('DCTDecode')]);
+    expect(images.map((dict) => dict.get(PDFName.of('Width'))?.toString())).toEqual(['1150']);
+    expect(bytes.byteLength).toBeLessThan(grainyBytes * 0.25);
+    await card(page, title).locator('.card').focus();
+    await page.keyboard.press('Delete');
+    await expect(card(page, title)).toHaveCount(0);
+  }
 });
 
 test('explains that dropping a folder isn’t supported, without leaving the page', async ({ page }) => {

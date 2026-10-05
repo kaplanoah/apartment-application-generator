@@ -1,10 +1,10 @@
 import { UserFacingError } from '../core/errors';
 import type { BuiltPacket, PacketSection } from '../pdf/buildPacket';
 import type { CoverDetails } from '../pdf/cover';
-import type { JpegShrinker } from '../pdf/shrinkImages';
+import type { ImageShrinker } from '../pdf/shrinkImages';
 import { isWorkerResponse, type ImageSizeLimits, type WorkerRequest, type WorkerResponse } from '../worker/protocol';
 import PacketWorker from '../worker/packetWorker?worker&inline';
-import { shrinkJpeg } from './imagePreparer';
+import { shrinkPdfImage } from './imagePreparer';
 
 export type WorkerFactory = () => Worker;
 
@@ -19,7 +19,7 @@ export async function buildPacketInWorker(
   sections: readonly PacketSection[],
   onProgress: (done: number, total: number) => void,
   imageLimits: ImageSizeLimits | null = null,
-  shrinkImage: JpegShrinker = shrinkJpeg,
+  shrinkImage: ImageShrinker = shrinkPdfImage,
   createWorker: WorkerFactory = () => new PacketWorker(),
 ): Promise<BuiltPacket> {
   const worker = createWorker();
@@ -44,7 +44,7 @@ export async function buildPacketInWorker(
 
 interface Listeners {
   readonly onProgress: (done: number, total: number) => void;
-  readonly shrinkImage: JpegShrinker;
+  readonly shrinkImage: ImageShrinker;
 }
 
 /** Sends one request, answers progress and image requests, and resolves with the final reply. */
@@ -83,10 +83,10 @@ function request(
 
 async function answerShrink(
   worker: Worker,
-  { id, jpeg, maxEdge, quality }: Extract<WorkerResponse, { type: 'shrink-image' }>,
-  shrinkImage: JpegShrinker,
+  { id, source, maxEdge, quality }: Extract<WorkerResponse, { type: 'shrink-image' }>,
+  shrinkImage: ImageShrinker,
 ): Promise<void> {
-  const image = await shrinkImage(jpeg, maxEdge, quality).catch(() => null);
+  const image = await shrinkImage(source, maxEdge, quality).catch(() => null);
   const reply: WorkerRequest = { type: 'shrunk-image', id, image };
   worker.postMessage(reply, image ? [image.bytes.buffer as ArrayBuffer] : []);
 }

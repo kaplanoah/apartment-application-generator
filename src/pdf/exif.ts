@@ -68,3 +68,38 @@ export function orientationToTurn(orientation: number): QuarterTurn | null {
       return null;
   }
 }
+
+/**
+ * Returns the JPEG without its EXIF block, so a decoder draws the pixels as stored, the way PDF
+ * viewers do, instead of applying the rotation tag. Returns the input unchanged if it has none
+ * or isn't laid out as expected.
+ */
+export function withoutExif(bytes: Uint8Array): Uint8Array {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length < 4 || view.getUint16(0) !== 0xffd8) return bytes;
+
+  const kept: Uint8Array[] = [bytes.subarray(0, 2)];
+  let removed = false;
+  let offset = 2;
+  while (offset + 4 <= bytes.length) {
+    if (bytes[offset] !== 0xff) return bytes;
+    const marker = bytes[offset + 1] ?? 0;
+    if (marker === 0xda || marker === 0xd9) break; // image data starts
+    const length = view.getUint16(offset + 2);
+    if (length < 2 || offset + 2 + length > bytes.length) return bytes;
+    const isExif = marker === 0xe1 && length >= 8 && view.getUint32(offset + 4) === 0x45786966;
+    if (isExif) removed = true;
+    else kept.push(bytes.subarray(offset, offset + 2 + length));
+    offset += 2 + length;
+  }
+  if (!removed) return bytes;
+  kept.push(bytes.subarray(offset));
+
+  const result = new Uint8Array(kept.reduce((sum, part) => sum + part.byteLength, 0));
+  let position = 0;
+  for (const part of kept) {
+    result.set(part, position);
+    position += part.byteLength;
+  }
+  return result;
+}

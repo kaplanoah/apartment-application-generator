@@ -8,8 +8,6 @@ cover page, a linked table of contents and a footer on every page.
 connects to the internet, and your documents are never transferred or stored. See
 [SECURITY.md](SECURITY.md) for how that's enforced and how to check it yourself.
 
-![The app: details, folder, order and generate steps](docs/screenshot.png)
-
 ## How it works
 
 1. **Apartment.** Type the apartment's address. The footer on every page is made from
@@ -128,9 +126,11 @@ Sizes are based on how large an image prints on a letter page:
 | **Balanced** (default) | about 150 dpi    | almost everything. IDs stay crisp.     |
 | High                   | about 300 dpi    | printing. Looks the same as originals. |
 
-An image is only re-encoded when it's bigger than the limit, and only if the result is
-actually smaller, so nothing is compressed twice. Images the app can't safely change (CMYK,
-masked or unusual formats) are kept exactly as they are.
+An image is re-encoded when it's bigger than the limit, or when it's stored losslessly
+(as Pages, Word and "Save as PDF" do with pictures, and in PNG files) and a JPEG would be
+less than half the size. The result is used only if it's actually smaller. Small lossless
+images like logos are left alone, and images the app can't safely change (CMYK, JPEG 2000,
+color-key masks) are kept exactly as they are.
 
 Every packet is also cleaned up losslessly, whichever size you pick: logos, fonts and
 images repeated across documents (a year of bank statements, say) are stored once,

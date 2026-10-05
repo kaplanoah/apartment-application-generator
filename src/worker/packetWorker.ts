@@ -3,7 +3,7 @@
 import './sealOnLoad';
 import { UserFacingError } from '../core/errors';
 import { buildPacket } from '../pdf/buildPacket';
-import type { JpegShrinker, ShrunkImage } from '../pdf/shrinkImages';
+import type { ImageShrinker, ShrunkImage } from '../pdf/shrinkImages';
 import type { WorkerRequest, WorkerResponse } from './protocol';
 import { exposedGlobals } from './seal';
 
@@ -14,12 +14,13 @@ const pendingShrinks = new Map<number, (image: ShrunkImage | null) => void>();
 let nextShrinkId = 1;
 
 /** Has the page re-encode an image; the answer arrives as a 'shrunk-image' message. */
-const askPageToShrink: JpegShrinker = (jpeg, maxEdge, quality) =>
+const askPageToShrink: ImageShrinker = (source, maxEdge, quality) =>
   new Promise((resolve) => {
     const id = nextShrinkId++;
     pendingShrinks.set(id, resolve);
-    const copy = jpeg.slice(); // the original stays in the PDF until replaced
-    reply({ type: 'shrink-image', id, jpeg: copy, maxEdge, quality }, [copy.buffer as ArrayBuffer]);
+    // Sent in a buffer of its own, which is handed over: the original stays in the PDF until replaced.
+    const sent = { ...source, bytes: source.bytes.slice() };
+    reply({ type: 'shrink-image', id, source: sent, maxEdge, quality }, [sent.bytes.buffer as ArrayBuffer]);
   });
 
 scope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
