@@ -178,6 +178,10 @@ main {
   gap: 14px;
 }
 
+.step > :empty {
+  display: none;
+}
+
 .step-num {
   display: inline-flex;
   align-items: center;
@@ -513,19 +517,43 @@ main {
 }
 
 .select.small select {
-  height: 28px;
-  padding: 0 24px 0 4px;
+  height: 26px;
+  padding: 0 18px 0 6px;
   font-size: 0.8rem;
   color: var(--faint);
   border-color: transparent;
   background: transparent;
+  /* Fit the chosen option, so the caret sits right after the word. */
+  field-sizing: content;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
 }
 
 .select.small::after {
-  right: 9px;
+  right: 7px;
   width: 5px;
   height: 5px;
   border-color: var(--faint);
+}
+
+.select.small:hover select {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.select.small:hover::after {
+  border-color: var(--muted);
+}
+
+/* Focus shows as the same soft background as hover, not a heavy outline. */
+.select.small select:focus {
+  outline: none;
+}
+
+.select.small select:focus-visible {
+  background: var(--surface-2);
+  color: var(--muted);
 }
 
 .range-all {

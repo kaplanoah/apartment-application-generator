@@ -52,7 +52,7 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
     const sections = state.folder ? planPacket(state.folder.library, state.packet, state.today) : [];
     const files = sections.reduce((sum, section) => sum + section.documents.length, 0);
     const working = state.build.status === 'working';
-    button.disabled = working || sections.length === 0;
+    button.disabled = working;
     button.textContent = working ? 'Working…' : 'Generate PDF';
     summary.textContent = !state.folder
       ? 'Add your folder to get started.'
