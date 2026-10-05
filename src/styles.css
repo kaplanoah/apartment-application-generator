@@ -5,7 +5,8 @@
   --surface-2: #e7e9e3;
   --ink: #1b2230;
   --muted: #596173;
-  --faint: #8a91a0;
+  /* At least 4.5:1 against --surface, --surface-2 and --good-bg, in both schemes. */
+  --faint: #606777;
   --line: #d3d6cd;
   --accent: #28477a;
   --accent-ink: #ffffff;
@@ -33,7 +34,7 @@
     --surface-2: #222a36;
     --ink: #e5e8ee;
     --muted: #9aa3b3;
-    --faint: #6e7788;
+    --faint: #929bac;
     --line: #2e3746;
     --accent: #93b2ea;
     --accent-ink: #0e1420;
@@ -201,27 +202,15 @@ main {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--muted);
 }
 
 .field input {
   font-size: 0.95rem;
-  font-weight: 400;
-  color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 8px 10px;
   min-width: 0;
-}
-
-.label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--muted);
 }
 
 /* Notices */
@@ -302,16 +291,9 @@ main {
   color: var(--accent-ink);
 }
 
-.button.primary:disabled {
+.button.primary[aria-disabled='true'] {
   opacity: 0.45;
   cursor: default;
-}
-
-.button.secondary {
-  background: var(--surface);
-  color: var(--accent);
-  border-color: var(--line);
-  padding: 5px 12px;
 }
 
 /* Step 3: tiles */
@@ -392,7 +374,7 @@ main {
   stroke-linejoin: round;
 }
 
-/* Step 3: packet list (Numerals) */
+/* Step 3: packet list */
 .packet {
   list-style: none;
   margin: 0;
@@ -550,11 +532,7 @@ main {
   border-color: var(--muted);
 }
 
-/* Focus shows as the same soft background as hover, not a heavy outline. */
-.select.small select:focus {
-  outline: none;
-}
-
+/* Keyboard focus adds the hover background to the usual focus ring. */
 .select.small select:focus-visible {
   background: var(--surface-2);
   color: var(--muted);
@@ -585,10 +563,6 @@ main {
   font: 11px/1.55 var(--font-mono);
   color: var(--faint);
   overflow-wrap: anywhere;
-}
-
-.paths .sub {
-  opacity: 0.7;
 }
 
 .paths.skipped {

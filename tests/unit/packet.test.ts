@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { moveItem, newPacketItem, planPacket } from '../../src/core/packet';
+import { moveItem, newPacketItem, planPacket, refreshPacketItem } from '../../src/core/packet';
 import { footerText, joinNames, packetFileName } from '../../src/core/naming';
 import { DEFAULT_SIZE_PRESET, getSizePreset, SIZE_PRESETS } from '../../src/core/sizePresets';
 import { libraryOf, TODAY } from '../support/library';
@@ -40,6 +40,21 @@ describe('planPacket', () => {
   it('starts new items with a sensible range', () => {
     expect(newPacketItem(option('Cover Letter')).range).toEqual({ kind: 'all' });
     expect(newPacketItem(option('Pay Stubs')).range.kind).toBe('months');
+  });
+});
+
+describe('refreshPacketItem', () => {
+  it('keeps a range that still applies', () => {
+    const lastThree = { optionId: 'Pay Stubs/', range: { kind: 'documents' as const, count: 3 } };
+    expect(refreshPacketItem(lastThree, option('Pay Stubs'))).toBe(lastThree);
+    const all = { optionId: 'ID/', range: { kind: 'all' as const } };
+    expect(refreshPacketItem(all, option('ID'))).toBe(all);
+  });
+
+  it('starts over when the folder no longer has dated files', () => {
+    const undated = libraryOf(['Pay Stubs/stub.pdf']).options[0]!;
+    const lastTwoMonths = newPacketItem(option('Pay Stubs'));
+    expect(refreshPacketItem(lastTwoMonths, undated)).toEqual({ optionId: 'Pay Stubs/', range: { kind: 'all' } });
   });
 });
 

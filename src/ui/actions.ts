@@ -1,9 +1,9 @@
 import { parseContactInfo } from '../core/contactInfo';
 import { UserFacingError } from '../core/errors';
 import { buildLibrary, type LibraryDocument } from '../core/library';
-import { planPacket, type PlannedSection } from '../core/packet';
+import { findOption, planPacket, refreshPacketItem, type PacketItem, type PlannedSection } from '../core/packet';
 import { packetFileName } from '../core/naming';
-import { getSizePreset, type SizePreset } from '../core/sizePresets';
+import { getSizePreset, type SizePreset, type SizePresetId } from '../core/sizePresets';
 import type { PickedFolder } from '../browser/readFolder';
 import type { BuiltPacket, PacketDocument, PacketSection } from '../pdf/buildPacket';
 import type { CoverDetails } from '../pdf/cover';
@@ -32,6 +32,23 @@ export function setAddress(store: Store<AppState>, address: string): void {
   store.update({ address });
 }
 
+export function setPacket(store: Store<AppState>, packet: readonly PacketItem[]): void {
+  store.update((state) => ({ packet, build: clearBuildResult(state) }));
+}
+
+export function setSizePreset(store: Store<AppState>, sizePreset: SizePresetId): void {
+  store.update((state) => ({ sizePreset, build: clearBuildResult(state) }));
+}
+
+/**
+ * A finished build's message no longer applies once the choices change. A
+ * build that's still working is left alone: it finishes with the choices it
+ * started with, and only one can run at a time.
+ */
+function clearBuildResult(state: AppState): AppState['build'] {
+  return state.build.status === 'working' ? state.build : { status: 'idle' };
+}
+
 /** Loads a picked or dropped folder, keeping any arrangement that still applies. */
 export async function loadFolder(store: Store<AppState>, picking: Promise<PickedFolder>): Promise<void> {
   store.update({ folderLoading: true, folderError: null });
@@ -49,9 +66,12 @@ export async function loadFolder(store: Store<AppState>, picking: Promise<Picked
     const contact = await readContactFile(library.contactFile);
     store.update((state) => ({
       folder: { name: picked.name, library, contact },
-      packet: state.packet.filter((item) => library.options.some((option) => option.id === item.optionId)),
+      packet: state.packet.flatMap((item) => {
+        const option = findOption(library, item.optionId);
+        return option ? [refreshPacketItem(item, option)] : [];
+      }),
       folderLoading: false,
-      build: { status: 'idle' },
+      build: clearBuildResult(state),
     }));
   } catch (error) {
     store.update({
@@ -149,16 +169,24 @@ export async function generate(store: Store<AppState>, services: Services): Prom
       build: { status: 'done', fileName, pageCount: built.pageCount, byteLength: built.bytes.byteLength, sizeReport },
     });
   } catch (error) {
-    store.update({ build: { status: 'error', ...toNotice(error, 'Something went wrong while building the PDF.') } });
+    store.update({
+      build: {
+        status: 'error',
+        ...toNotice(
+          error,
+          'Something went wrong while building the PDF. Click “Generate PDF” to try again. If it happens again, reload the page and choose your folder again.',
+        ),
+      },
+    });
   }
 }
 
 /** Each section's original file sizes next to the space it takes up in the packet. */
 function reportSizes(sections: readonly PlannedSection<File>[], built: BuiltPacket): SizeReport {
-  const report = sections.map((section, i) => ({
+  const report = sections.map((section, index) => ({
     title: section.title,
     before: section.documents.reduce((sum, doc) => sum + doc.file.size, 0),
-    after: built.sectionBytes[i] ?? 0,
+    after: built.sectionBytes[index] ?? 0,
   }));
   return { sections: report.sort((a, b) => b.after - a.after), sharedSaved: built.cleanupSavings };
 }

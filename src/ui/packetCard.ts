@@ -11,6 +11,19 @@ export interface CardHandlers {
   readonly onRangeChange: (range: Range) => void;
 }
 
+const CARD_HELP_ID = 'card-help';
+
+export const cardFocusKey = (optionId: string) => `card:${optionId}`;
+
+/** How to move and remove cards, read out as each card's description rather than as part of its name. */
+export function cardHelp(): HTMLElement {
+  return h(
+    'p',
+    { id: CARD_HELP_ID, class: 'visually-hidden' },
+    'Drag back up to remove, or use Alt plus arrow keys to move and Delete to remove.',
+  );
+}
+
 function skipText(skip: SkippedFile): string {
   switch (skip.reason) {
     case 'different-level':
@@ -30,7 +43,7 @@ export function packetCard(
   today: CalendarDate,
   handlers: CardHandlers,
 ): HTMLElement {
-  const focusKey = `card:${option.id}`;
+  const focusKey = cardFocusKey(option.id);
   let included: readonly LibraryDocument<unknown>[];
   let notIncluded: string[] = [];
   let control: HTMLElement | null = null;
@@ -60,7 +73,9 @@ export function packetCard(
         draggable: 'true',
         tabindex: 0,
         'data-focus-key': focusKey,
-        'aria-label': `${index + 1}. ${option.title}. Drag back up to remove, or use Alt plus arrow keys to move and Delete to remove.`,
+        role: 'group',
+        'aria-label': option.title,
+        'aria-describedby': CARD_HELP_ID,
       },
       h('div', { class: 'card-top' }, h('span', { class: 'card-title' }, option.title), optionIcon(option)),
       control,
@@ -69,15 +84,10 @@ export function packetCard(
           'div',
           { class: 'files' },
           h('span', { class: included.length > 0 ? 'count' : 'count empty' }, count),
-          included.length > 0 &&
-            h('p', { class: 'paths' }, ...included.flatMap((doc, i) => [i > 0 ? ' · ' : '', pathNode(doc)])),
+          included.length > 0 && h('p', { class: 'paths' }, included.map((doc) => doc.path).join(' · ')),
         ),
       option.kind === 'file' && h('p', { class: 'paths' }, option.document.name),
       notIncluded.length > 0 && h('p', { class: 'paths skipped' }, `Not included: ${notIncluded.join(', ')}`),
     ),
   );
-}
-
-function pathNode(doc: LibraryDocument<unknown>): HTMLElement {
-  return h('span', null, doc.subfolder && h('span', { class: 'sub' }, `${doc.subfolder}/`), doc.name);
 }
