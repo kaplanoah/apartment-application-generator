@@ -3,6 +3,7 @@ dist/
 test-results/
 playwright-report/
 .DS_Store
+.claude/worktrees/
 
 # Never commit real documents. Keep your own folder outside this repository.
 # Only the fake sample folder in example/ belongs here.
