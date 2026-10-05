@@ -91,6 +91,10 @@ jobs:
           path: dist
       - run: npx playwright install --with-deps ${{ matrix.project == 'chromium' && '--only-shell chromium' || 'webkit' }}
       - run: npx playwright test --project=${{ matrix.project }}
+      # The page as each failed test last saw it, so a failure can be understood from the log.
+      - name: Show the page at each failure
+        if: failure()
+        run: find test-results -name error-context.md -exec sh -c 'echo "::group::$1"; cat "$1"; echo "::endgroup::"' _ {} \;
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: failure()
         with:
