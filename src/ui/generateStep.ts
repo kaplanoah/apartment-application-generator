@@ -1,5 +1,5 @@
 import { planPacket } from '../core/packet';
-import { SIZE_PRESETS, type SizePresetId } from '../core/sizePresets';
+import { getSizePreset, SIZE_PRESETS, type SizePresetId } from '../core/sizePresets';
 import { generate, type Services } from './actions';
 import { h, replaceChildren } from './dom';
 import type { AppState, SizeReport } from './state';
@@ -14,23 +14,17 @@ const NOTABLE_SAVING_BYTES = 100 * 1024;
 
 /** Step 4: pick a size and build the PDF. */
 export function createGenerateStep(store: Store<AppState>, services: Services) {
-  const sizes = h(
-    'fieldset',
-    { class: 'sizes' },
-    h('legend', null, 'File size'),
-    ...SIZE_PRESETS.map((preset) => {
-      const radio = h('input', { type: 'radio', name: 'size', value: preset.id, id: `size-${preset.id}` });
-      radio.addEventListener('change', () =>
-        store.update({ sizePreset: preset.id as SizePresetId, build: { status: 'idle' } }),
-      );
-      return h(
-        'label',
-        { class: 'size', for: `size-${preset.id}` },
-        radio,
-        h('span', { class: 'size-label' }, preset.label),
-        h('span', { class: 'size-help' }, preset.description),
-      );
-    }),
+  const sizeSelect = h('select', { 'aria-label': 'File size', id: 'file-size' });
+  for (const preset of SIZE_PRESETS) sizeSelect.append(h('option', { value: preset.id }, preset.label));
+  sizeSelect.addEventListener('change', () =>
+    store.update({ sizePreset: sizeSelect.value as SizePresetId, build: { status: 'idle' } }),
+  );
+  // Styled like the quiet "through Sep 30" choice on the order cards.
+  const sizeChoice = h(
+    'span',
+    { class: 'size-choice' },
+    h('label', { for: 'file-size' }, 'File size:'),
+    h('span', { class: 'select small' }, sizeSelect),
   );
   const button = h(
     'button',
@@ -47,19 +41,13 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
     'section',
     { class: 'step', 'aria-labelledby': 'step-generate' },
     h('h2', { id: 'step-generate' }, h('span', { class: 'step-num' }, '4'), 'Generate'),
-    sizes,
-    h(
-      'p',
-      { class: 'faint' },
-      'Text is never changed, so it stays sharp. Only photos and scanned images, including those inside PDFs, are resized.',
-    ),
-    h('div', { class: 'generate-row' }, summary, button),
+    h('div', { class: 'generate-row' }, h('div', { class: 'generate-summary' }, summary, sizeChoice), button),
     result,
   );
 
   function update(state: AppState): void {
-    for (const radio of sizes.querySelectorAll<HTMLInputElement>('input[type=radio]'))
-      radio.checked = radio.value === state.sizePreset;
+    sizeSelect.value = state.sizePreset;
+    sizeSelect.title = getSizePreset(state.sizePreset).description;
 
     const sections = state.folder ? planPacket(state.folder.library, state.packet, state.today) : [];
     const files = sections.reduce((sum, section) => sum + section.documents.length, 0);
