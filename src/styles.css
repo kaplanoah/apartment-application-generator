@@ -263,27 +263,20 @@ main {
 }
 
 /* Step 2 */
-.dropzone {
-  border: 1px dashed var(--line);
-  border-radius: var(--radius-lg);
-  padding: 26px 16px;
-  text-align: center;
+.folder-picker {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+
+.folder-row {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  transition:
-    border-color 0.15s,
-    background-color 0.15s;
+  flex-wrap: wrap;
+  gap: 8px 14px;
 }
 
-.dropzone.loaded {
-  border-style: solid;
-  padding-block: 16px;
-}
-
-.drop-status {
-  font-size: 0.85rem;
+.folder-status {
   color: var(--muted);
 }
 

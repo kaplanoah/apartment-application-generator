@@ -5,7 +5,7 @@ import { h, replaceChildren } from './dom';
 import type { AppState } from './state';
 import type { Store } from './store';
 
-/** Step 2: drop or choose the documents folder, with clear feedback on problems. */
+/** Step 2: choose the documents folder, with clear feedback on problems. */
 export function createFolderStep(store: Store<AppState>) {
   const input = h('input', {
     type: 'file',
@@ -32,16 +32,17 @@ export function createFolderStep(store: Store<AppState>) {
     { type: 'button', class: 'button primary', onclick: () => input.click() },
     'Choose folder…',
   );
-  const status = h('div', { class: 'drop-status', 'aria-live': 'polite' });
+  const status = h('div', { class: 'folder-status', 'aria-live': 'polite' });
   const feedback = h('div');
-  const zone = h(
+  const picker = h(
     'div',
-    { class: 'dropzone', id: 'dropzone' },
-    chooseButton,
-    status,
+    { class: 'folder-picker' },
+    h('div', { class: 'folder-row' }, chooseButton, status),
     h(
       'p',
       { class: 'faint' },
+      'Files associated with years or months must end with the format YYYY, YYYY-MM, or YYYY-MM-DD.',
+      h('br'),
       'Drag and drop isn’t supported: browsers don’t read large, nested folders reliably that way.',
     ),
     input,
@@ -68,7 +69,7 @@ export function createFolderStep(store: Store<AppState>) {
     'section',
     { class: 'step', 'aria-labelledby': 'step-folder' },
     h('h2', { id: 'step-folder' }, h('span', { class: 'step-num' }, '2'), 'Documents folder'),
-    zone,
+    picker,
     feedback,
   );
 
@@ -91,7 +92,6 @@ export function createFolderStep(store: Store<AppState>) {
         'Pick the folder that holds your documents: PDFs, photos (JPG, PNG, HEIC) and text files.',
       );
     }
-    zone.classList.toggle('loaded', state.folder !== null);
 
     const ignored = state.folder?.library.ignored ?? [];
     const needPdf = ignored.filter((item) => item.reason === 'needs-pdf');

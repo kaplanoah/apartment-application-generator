@@ -12,14 +12,15 @@ export function createDetailsStep(store: Store<AppState>) {
     spellcheck: 'false',
     maxlength: 200,
     placeholder: '123 Main St, Apt 4B',
+    'aria-label': 'Address',
     oninput: () => setAddress(store, address.value),
   });
 
   const element = h(
     'section',
     { class: 'step', 'aria-labelledby': 'step-details' },
-    h('h2', { id: 'step-details' }, h('span', { class: 'step-num' }, '1'), 'Apartment'),
-    h('label', { class: 'field', for: 'address' }, h('span', null, 'Address'), address),
+    h('h2', { id: 'step-details' }, h('span', { class: 'step-num' }, '1'), 'Address'),
+    h('div', { class: 'field' }, address),
   );
 
   return { element };

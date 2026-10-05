@@ -183,11 +183,11 @@ test('says it is local-only and ships a strict no-network policy', async ({ page
 test('builds a packet in the chosen order with cover, contents, links and footers', async ({ page }) => {
   test.slow(); // builds and reads back a 14-page packet
   const { outside, errors } = await openApp(page);
-  await page.getByLabel('Address').fill('123 Main St, Apt 4B');
+  await page.getByRole('textbox', { name: 'Address' }).fill('123 Main St, Apt 4B');
 
   await chooseFolder(page, docsFolder);
-  await expect(page.locator('.drop-status')).toContainText('“Apartment Docs”');
-  await expect(page.locator('.drop-status')).toContainText('contact info for 2 people');
+  await expect(page.locator('.folder-status')).toContainText('“Apartment Docs”');
+  await expect(page.locator('.folder-status')).toContainText('contact info for 2 people');
   await expect(page.locator('#contact-help')).toHaveCount(0);
   // Cover Letter.pages has its exported PDF beside it, so nothing asks for it.
   await expect(page.getByText('Save this as a PDF')).toHaveCount(0);

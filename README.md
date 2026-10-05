@@ -10,7 +10,7 @@ connects to the internet, and your documents are never transferred or stored. Se
 
 ## How it works
 
-1. **Apartment.** Type the apartment's address. The footer on every page is made from
+1. **Address.** Type the apartment's address. The footer on every page is made from
    your names and the address, like
    `Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B · Oct 2026`.
 2. **Documents folder.** Click **Choose folder…** and pick the folder that holds all your
@@ -62,8 +62,8 @@ The rules:
 
 - **Each top-level folder and top-level file is one option** you can drag into the packet.
   Folder names are used as section titles, so name them the way you want them to read.
-- **Put dates in file names** so date ranges work: `2026-09-18` for a day, `2026-09` for a
-  month, `2025` for a year. They can go anywhere in the name (`jordan_2026-09-30.pdf`).
+- **Files associated with years or months must end with the format YYYY, YYYY-MM, or
+  YYYY-MM-DD**, so date ranges work: `w2_2025.pdf`, `2026-09.pdf`, `jordan_2026-09-30.pdf`.
   US-style dates like `09-10-2026` are ignored because they're ambiguous.
 - **Subfolders are fine** (for example one per person). Their names don't matter. They're
   only shown as faint labels.
