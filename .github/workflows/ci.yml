@@ -187,8 +187,9 @@ jobs:
             exit 1
           fi
 
-          tagged="$(gh api "repos/$GH_REPO/git/ref/tags/$version" --jq .object.sha 2> /dev/null || true)"
-          if [ -n "$tagged" ] && [ "$tagged" != "$GITHUB_SHA" ]; then
+          # gh fails when there's no such tag, which is the usual case.
+          if tagged="$(gh api "repos/$GH_REPO/git/ref/tags/$version" --jq .object.sha 2> /dev/null)" &&
+            [ "$tagged" != "$GITHUB_SHA" ]; then
             echo "::error::Tag $version already exists at $tagged, not at this commit. Delete the tag or bump the version."
             exit 1
           fi
