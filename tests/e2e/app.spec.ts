@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { test as base, expect, type Page, type Request } from '@playwright/test';
 import { PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import {
@@ -184,7 +184,34 @@ const SAFE_WORKER_GLOBALS = new Set([
   'eval', // blocked by the policy, which has no 'unsafe-eval'
 ]);
 
-const chooseFolder = (page: Page, folder: string) => page.locator('#folder-input').setInputFiles(folder);
+/**
+ * Hands the page a folder the way the folder picker does: the input's files, each with its path
+ * from the folder down, then a "change" event. Playwright's own folder upload (setInputFiles)
+ * stalls WebKit for tens of seconds at random on CI, an upstream bug, so only the test of the
+ * real picker uses it.
+ */
+async function chooseFolder(page: Page, folder: string) {
+  const names = await readdir(folder, { recursive: true, withFileTypes: true });
+  const picked = await Promise.all(
+    names
+      .filter((entry) => entry.isFile())
+      .map(async (entry) => {
+        const path = join(entry.parentPath, entry.name);
+        const relativePath = join(basename(folder), path.slice(folder.length + 1)).replaceAll('\\', '/');
+        return { relativePath, base64: (await readFile(path)).toString('base64') };
+      }),
+  );
+  await page.locator('#folder-input').evaluate((input: HTMLInputElement, files) => {
+    const chosen = files.map(({ relativePath, base64 }) => {
+      const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+      const file = new File([bytes], relativePath.split('/').at(-1) ?? relativePath);
+      return Object.defineProperty(file, 'webkitRelativePath', { value: relativePath });
+    });
+    Object.defineProperty(input, 'files', { value: chosen, configurable: true });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    Reflect.deleteProperty(input, 'files');
+  }, picked);
+}
 const addTile = (page: Page, title: string) => page.getByRole('button', { name: `Add ${title}`, exact: true }).click();
 const card = (page: Page, title: string) =>
   page.locator('.row').filter({ has: page.locator('.card-title', { hasText: title }) });
@@ -478,6 +505,18 @@ test('text files become pages, and the security details link points to the repos
   expect(pdf.pages).toHaveLength(2);
   expect(pdf.pages[1]).toContain('Thank you for considering our application.');
   expect(pdf.pages[1]).toContain('Alex & Jordan');
+});
+
+test('the real folder picker reads a whole folder, subfolders included', async ({ page, browserName }) => {
+  // Playwright's folder upload stalls WebKit at random on CI (an upstream bug, not the app's),
+  // so the real picker is tested in Chromium; every other test hands over the folder directly.
+  test.skip(browserName === 'webkit', 'Playwright folder uploads stall WebKit at random');
+  await openApp(page);
+  await page.locator('#folder-input').setInputFiles(docsFolder);
+  await expect(page.locator('.folder-status')).toContainText('Apartment Docs');
+  for (const title of ['Bank Statements', 'Cover Letter', 'Pay Stubs', 'W-2s']) {
+    await expect(page.getByRole('button', { name: `Add ${title}`, exact: true })).toBeVisible();
+  }
 });
 
 test('cards can be reordered and removed with the keyboard or by dragging back', async ({ page }) => {
