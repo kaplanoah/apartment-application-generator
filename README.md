@@ -197,29 +197,35 @@ repository named in `package.json` (`repository.url`). Update it if you fork the
 ### Contributing
 
 The rules for changes, including the privacy guarantees, are in [AGENTS.md](AGENTS.md).
-Every change goes through a pull request. CI runs lint, formatting, types, dead-code
+Every change goes through a pull request. CI runs formatting, lint, types, dead-code
 detection, unit tests in three time zones, and browser tests in Chromium and WebKit side by
-side; the single `check` job passes only when all of them do, so require it before merging.
+side; the single `check` job passes only when all of them do. In the branch protection rule
+for `main`, require the `check` job and conversation resolution before merging.
 
 Pull requests are also reviewed by Claude for bugs, privacy and security issues, and rule
-violations. To turn that on in your copy, add a `CLAUDE_CODE_OAUTH_TOKEN` (or
-`ANTHROPIC_API_KEY`) repository secret; without one, the review step is skipped.
+violations. Its findings start with **Must fix** or **Should fix**. To turn that on in your
+copy, add a `CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`) repository secret; without
+one, the review step is skipped. The review only runs when `.github/workflows/ci.yml` matches
+`main`, so a pull request that changes it gets a "Not reviewed" comment instead.
 
 ### Releasing
 
-Releases are automatic. A pull request that changes the app (`src/`, `build/`,
-`index.html` or `vite.config.ts`) must bump `version` in `package.json`, following
+Releases are automatic. A pull request that changes the built file, `dist/index.html`
+(including through a dependency upgrade), must bump `version` in `package.json`, following
 [semantic versioning](https://semver.org):
 
 ```sh
 npm version patch --no-git-tag-version   # fixes and polish; minor for features, major for breaking changes
 ```
 
-CI's `version` check says on every pull request whether merging releases a new version, and
-fails if the app changes without a bump. When a new version reaches `main`, the Release
-workflow runs every check, builds the app, tags the commit and publishes
-`apartment-packet-builder.html`, a zip with the example folder and their checksums on the
-Releases page. The README's download link always points at the latest release.
+CI's `version` check builds the pull request and its base, says whether merging releases a
+new version, and fails if the built file changes without a bump. When a new version reaches
+`main`, CI runs every check and then its `release` job tags the commit and publishes the
+exact file the checks passed as `apartment-packet-builder.html`, with a zip with the example
+folder and their checksums, on the Releases page. If the app on `main` ever differs from the
+released file without a new version, that job fails and says so. "Run workflow" on the CI
+workflow re-runs it for `main`. The README's download link always points at the latest
+release.
 
 ## License
 

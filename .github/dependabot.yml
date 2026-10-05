@@ -1,0 +1,23 @@
+# Monthly, grouped updates. Each one goes through CI like any other pull request, and the
+# version check says whether it changes the built app, which then needs a version bump.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    # Skip releases younger than a week: a hijacked package is usually caught by then.
+    cooldown:
+      default-days: 7
+    groups:
+      development:
+        dependency-type: development
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ['*']
