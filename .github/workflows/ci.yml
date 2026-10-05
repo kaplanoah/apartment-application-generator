@@ -27,6 +27,24 @@ jobs:
       - run: npm ci
       - run: npm run lint
 
+  # Says whether merging releases a new version, and fails when the app changes without a
+  # version bump. Merging a bump publishes the release (see release.yml).
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/check-version.ts
+        env:
+          BASE_REF: ${{ github.base_ref }}
+
   format:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -232,7 +250,7 @@ jobs:
   # GitHub counts a skipped required check as passing.
   check:
     if: always()
-    needs: [lint, format, typecheck, deadcode, test, browser, build, review]
+    needs: [lint, version, format, typecheck, deadcode, test, browser, build, review]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
