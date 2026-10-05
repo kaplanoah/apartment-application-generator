@@ -433,3 +433,26 @@ test('names password-protected PDFs and how to fix them', async ({ page }) => {
   await expect(alert).toContainText('One file couldn’t be added.');
   await expect(alert).toContainText('Bank Statements/2026-09.pdf: it’s password-protected');
 });
+
+test('tiles and cards dragged over the address field carry no text to drop into it', async ({ page }) => {
+  await openApp(page);
+  const address = page.getByRole('textbox', { name: 'Address' });
+  await address.fill('1 Elm St');
+  await chooseFolder(page, docsFolder);
+  await addTile(page, 'ID');
+  // What the field is offered; text there would be inserted into it by some browsers.
+  await address.evaluate((input) => {
+    input.dataset.draggedTypes = '';
+    input.addEventListener('dragover', (event) => {
+      input.dataset.draggedTypes += `${(event as DragEvent).dataTransfer?.types.join(',')};`;
+    });
+  });
+
+  await page.getByRole('button', { name: 'Add Cover Letter', exact: true }).dragTo(address);
+  await card(page, 'ID').locator('.card').dragTo(address);
+  const offered = (await address.getAttribute('data-dragged-types'))?.split(';').filter(Boolean) ?? [];
+  expect(offered.length).toBeGreaterThan(0);
+  expect(offered.every((types) => types === 'application/x-packet-item')).toBe(true);
+  await expect(address).toHaveValue('1 Elm St');
+  await expect(page.locator('.packet .card-title')).toHaveText(['ID']);
+});

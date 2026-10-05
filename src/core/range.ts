@@ -12,7 +12,7 @@ export type MonthsAnchor = 'last-full-month' | 'today';
 
 export const MIN_COUNT = 1;
 export const MAX_COUNT = 24;
-const DEFAULT_COUNT = 2;
+export const DEFAULT_COUNT = 2;
 
 export interface DateWindow {
   readonly start: CalendarDate;

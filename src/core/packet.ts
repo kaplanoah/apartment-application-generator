@@ -20,6 +20,15 @@ export function newPacketItem<F>(option: LibraryOption<F>): PacketItem {
   return { optionId: option.id, range: option.kind === 'folder' ? defaultRange(option) : { kind: 'all' } };
 }
 
+/**
+ * Keeps an item's range when its folder is read again, unless the range no
+ * longer applies: a folder without dated files can only include all of them.
+ */
+export function refreshPacketItem<F>(item: PacketItem, option: LibraryOption<F>): PacketItem {
+  const choosesByDate = option.kind === 'folder' && option.hasDates;
+  return choosesByDate || item.range.kind === 'all' ? item : newPacketItem(option);
+}
+
 export function findOption<F>(library: Library<F>, optionId: string): LibraryOption<F> | undefined {
   return library.options.find((option) => option.id === optionId);
 }

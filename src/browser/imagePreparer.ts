@@ -16,6 +16,13 @@ const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
 /** A PNG is swapped for a JPEG only when that's at most this fraction of its size. */
 const PNG_TO_JPEG_RATIO = 0.5;
 
+/** The largest canvas iPhone and iPad Safari will draw on; a bigger one silently fails. */
+export const MAX_CANVAS_PIXELS = 16_777_216;
+
+const CANT_RESIZE = 'this photo couldn’t be resized. Open it in Preview, export it as JPEG, then add the folder again.';
+
+type PixelSource = Extract<ImageSource, { kind: 'pixels' }>;
+
 /**
  * Prepares photos for the PDF using the browser's own decoder, entirely in
  * memory. Photos already small enough are kept byte-for-byte; larger ones are
@@ -54,9 +61,9 @@ export function createImagePreparer(preset: SizePreset): ImagePreparer {
  */
 export const shrinkPdfImage: ImageShrinker = async (source, maxEdge, quality) => {
   if (source.kind === 'pixels') {
-    const { width, height } = source;
     const canvas = pixelsToCanvas(source);
     try {
+      const { width, height } = canvas;
       const scale = Math.min(1, maxEdge / Math.max(width, height));
       return await redraw(canvas, width, height, scale, 'jpg', quality, 'image');
     } finally {
@@ -82,17 +89,9 @@ export const shrinkPdfImage: ImageShrinker = async (source, maxEdge, quality) =>
   }
 };
 
-/** Draws gray or RGB samples onto a canvas at full size. */
-function pixelsToCanvas(source: Extract<ImageSource, { kind: 'pixels' }>): HTMLCanvasElement {
-  const { width, height, channels, bytes } = source;
-  const rgba = new Uint8ClampedArray(width * height * 4);
-  for (let pixel = 0, from = 0, to = 0; pixel < width * height; pixel++, from += channels, to += 4) {
-    const red = bytes[from] as number;
-    rgba[to] = red;
-    rgba[to + 1] = channels === 3 ? (bytes[from + 1] as number) : red;
-    rgba[to + 2] = channels === 3 ? (bytes[from + 2] as number) : red;
-    rgba[to + 3] = 255;
-  }
+/** Draws gray or RGB samples onto a canvas, first shrinking images too big for one. */
+function pixelsToCanvas(source: PixelSource): HTMLCanvasElement {
+  const { width, height, rgba } = toRgbaPixels(source, canvasShrinkFactor(source.width, source.height));
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -100,6 +99,49 @@ function pixelsToCanvas(source: Extract<ImageSource, { kind: 'pixels' }>): HTMLC
   if (!context) throw new Error('No canvas');
   context.putImageData(new ImageData(rgba, width, height), 0, 0);
   return canvas;
+}
+
+/** The smallest whole-number factor that shrinks an image enough to fit on a canvas. */
+export function canvasShrinkFactor(width: number, height: number): number {
+  let factor = 1;
+  while (Math.ceil(width / factor) * Math.ceil(height / factor) > MAX_CANVAS_PIXELS) factor++;
+  return factor;
+}
+
+/** Turns gray or RGB samples into RGBA, averaging each block of factor × factor pixels into one. */
+export function toRgbaPixels(
+  { width, height, channels, bytes }: PixelSource,
+  factor: number,
+): { width: number; height: number; rgba: Uint8ClampedArray<ArrayBuffer> } {
+  const outWidth = Math.ceil(width / factor);
+  const outHeight = Math.ceil(height / factor);
+  const rgba = new Uint8ClampedArray(outWidth * outHeight * 4);
+  // Gray images repeat their one sample for red, green and blue.
+  const greenOffset = channels === 3 ? 1 : 0;
+  const blueOffset = channels === 3 ? 2 : 0;
+  for (let outY = 0; outY < outHeight; outY++) {
+    for (let outX = 0; outX < outWidth; outX++) {
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      let count = 0;
+      for (let y = outY * factor; y < Math.min(height, (outY + 1) * factor); y++) {
+        for (let x = outX * factor; x < Math.min(width, (outX + 1) * factor); x++) {
+          const from = (y * width + x) * channels;
+          red += bytes[from] as number;
+          green += bytes[from + greenOffset] as number;
+          blue += bytes[from + blueOffset] as number;
+          count++;
+        }
+      }
+      const to = (outY * outWidth + outX) * 4;
+      rgba[to] = red / count;
+      rgba[to + 1] = green / count;
+      rgba[to + 2] = blue / count;
+      rgba[to + 3] = 255;
+    }
+  }
+  return { width: outWidth, height: outHeight, rgba };
 }
 
 interface DecodedImage {
@@ -147,7 +189,7 @@ async function redraw(
   canvas.width = Math.max(1, Math.round(width * scale));
   canvas.height = Math.max(1, Math.round(height * scale));
   const context = canvas.getContext('2d');
-  if (!context) throw new UserFacingError(`${fileName}: the photo couldn’t be resized.`);
+  if (!context) throw new UserFacingError(`${fileName}: ${CANT_RESIZE}`);
   if (format === 'jpg') {
     context.fillStyle = '#fff'; // JPEG has no transparency
     context.fillRect(0, 0, canvas.width, canvas.height);
@@ -160,6 +202,6 @@ async function redraw(
   );
   const { width: outWidth, height: outHeight } = canvas;
   canvas.width = canvas.height = 0; // free the pixels right away
-  if (!blob) throw new UserFacingError(`${fileName}: the photo couldn’t be resized.`);
+  if (!blob) throw new UserFacingError(`${fileName}: ${CANT_RESIZE}`);
   return { bytes: new Uint8Array(await blob.arrayBuffer()), format, width: outWidth, height: outHeight };
 }

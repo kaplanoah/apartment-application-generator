@@ -1,13 +1,22 @@
-import { findOption, moveItem, newPacketItem, type PacketItem } from '../core/packet';
+import { findOption, moveItem, newPacketItem } from '../core/packet';
 import type { LibraryOption } from '../core/library';
-import { h, preservingFocus, replaceChildren } from './dom';
+import { setPacket } from './actions';
+import { findByFocusKey, h, preservingFocus, replaceChildren } from './dom';
 import { optionIcon } from './icons';
-import { packetCard } from './packetCard';
+import { cardFocusKey, cardHelp, packetCard } from './packetCard';
 import type { AppState } from './state';
-import type { Store } from './store';
+import { hasChanged, type Store } from './store';
 
 type DragSource =
   { readonly from: 'pool'; readonly optionId: string } | { readonly from: 'packet'; readonly index: number };
+
+/**
+ * Drags carry this private type rather than text, so dropping a tile or card
+ * on a text field (or another app) inserts nothing.
+ */
+const DRAG_TYPE = 'application/x-packet-item';
+
+const tileFocusKey = (optionId: string) => `tile:${optionId}`;
 
 /** Step 3: tiles for every top-level folder and file, dragged into an ordered list. */
 export function createOrderStep(store: Store<AppState>) {
@@ -17,16 +26,15 @@ export function createOrderStep(store: Store<AppState>) {
   let drag: DragSource | null = null;
   const dropLine = h('li', { class: 'drop-line', 'aria-hidden': 'true' });
 
-  const setPacket = (packet: readonly PacketItem[]) => store.update({ packet, build: { status: 'idle' } });
   const insertAt = (index: number, source: DragSource) => {
     const { packet, folder } = store.get();
     if (source.from === 'pool') {
       const option = folder && findOption(folder.library, source.optionId);
       if (option && !packet.some((item) => item.optionId === option.id)) {
-        setPacket([...packet.slice(0, index), newPacketItem(option), ...packet.slice(index)]);
+        setPacket(store, [...packet.slice(0, index), newPacketItem(option), ...packet.slice(index)]);
       }
     } else {
-      setPacket(moveItem(packet, source.index, index));
+      setPacket(store, moveItem(packet, source.index, index));
     }
   };
 
@@ -54,7 +62,10 @@ export function createOrderStep(store: Store<AppState>) {
     event.preventDefault();
     const index = drag.index;
     endDrag();
-    setPacket(store.get().packet.filter((_, i) => i !== index));
+    setPacket(
+      store,
+      store.get().packet.filter((_, position) => position !== index),
+    );
   });
 
   function dropIndex(y: number): number {
@@ -69,6 +80,12 @@ export function createOrderStep(store: Store<AppState>) {
     const rows = list.querySelectorAll('.row');
     list.insertBefore(dropLine, rows[index] ?? null);
   }
+  function startDrag(event: DragEvent, source: DragSource): void {
+    drag = source;
+    if (!event.dataTransfer) return;
+    event.dataTransfer.setData(DRAG_TYPE, source.from === 'pool' ? source.optionId : String(source.index));
+    event.dataTransfer.effectAllowed = 'move';
+  }
   function endDrag(): void {
     drag = null;
     dropLine.remove();
@@ -82,16 +99,23 @@ export function createOrderStep(store: Store<AppState>) {
     body,
   );
 
-  function render(state: AppState): void {
+  function render(state: AppState, previous?: AppState): void {
+    if (!hasChanged(state, previous, 'folder', 'packet')) return;
     const folder = state.folder;
     if (!folder) {
       replaceChildren(body, h('p', { class: 'hint' }, 'Add your documents folder first.'));
       return;
     }
     if (!body.contains(pool)) {
-      replaceChildren(body, h('p', { class: 'hint' }, 'Drag items in order. Click to add it to the end.'), pool, list);
+      replaceChildren(
+        body,
+        h('p', { class: 'hint' }, 'Drag items in order. Click to add it to the end.'),
+        pool,
+        list,
+        cardHelp(),
+      );
     }
-    renderPool(state, folder.library.options);
+    preservingFocus(pool, () => renderPool(state, folder.library.options));
     preservingFocus(list, () => renderList(state));
   }
 
@@ -100,21 +124,27 @@ export function createOrderStep(store: Store<AppState>) {
     const available = options.filter((option) => !used.has(option.id));
     replaceChildren(
       pool,
-      ...available.map((option) => {
+      ...available.map((option, position) => {
         const tile = h(
           'button',
-          { type: 'button', class: 'tile', draggable: 'true', 'aria-label': `Add ${option.title}` },
+          {
+            type: 'button',
+            class: 'tile',
+            draggable: 'true',
+            'aria-label': `Add ${option.title}`,
+            'data-focus-key': tileFocusKey(option.id),
+          },
           option.title,
           optionIcon(option),
         );
-        tile.addEventListener('click', () =>
-          insertAt(store.get().packet.length, { from: 'pool', optionId: option.id }),
-        );
-        tile.addEventListener('dragstart', (event) => {
-          drag = { from: 'pool', optionId: option.id };
-          event.dataTransfer?.setData('text/plain', option.title);
-          if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+        tile.addEventListener('click', () => {
+          insertAt(store.get().packet.length, { from: 'pool', optionId: option.id });
+          // Keep going from the same place in the pool, so pressing Enter again adds the next one.
+          if (!focusNearest(pool.querySelectorAll('.tile'), position)) {
+            findByFocusKey(list, cardFocusKey(option.id))?.focus();
+          }
         });
+        tile.addEventListener('dragstart', (event) => startDrag(event, { from: 'pool', optionId: option.id }));
         tile.addEventListener('dragend', endDrag);
         return h('li', null, tile);
       }),
@@ -139,19 +169,18 @@ export function createOrderStep(store: Store<AppState>) {
       ...state.packet.map((item, index) => {
         const option = findOption(folder.library, item.optionId);
         if (!option) return null;
-        const update = (packet: readonly PacketItem[]) => setPacket(packet);
         const row = packetCard(option, item, index, state.today, {
-          onRangeChange: (range) => update(state.packet.map((it, i) => (i === index ? { ...it, range } : it))),
+          onRangeChange: (range) =>
+            setPacket(
+              store,
+              state.packet.map((existing, position) => (position === index ? { ...existing, range } : existing)),
+            ),
         });
         const card = row.querySelector<HTMLElement>('.card');
         card?.addEventListener('dragstart', (event) => {
           if (event.target !== card) return;
-          drag = { from: 'packet', index };
-          if (event.dataTransfer) {
-            event.dataTransfer.setData('text/plain', option.title);
-            event.dataTransfer.effectAllowed = 'move';
-            showAsTile(event.dataTransfer, option);
-          }
+          startDrag(event, { from: 'packet', index });
+          if (event.dataTransfer) showAsTile(event.dataTransfer, option);
           requestAnimationFrame(() => row.classList.add('dragging'));
         });
         card?.addEventListener('dragend', endDrag);
@@ -164,10 +193,17 @@ export function createOrderStep(store: Store<AppState>) {
           if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
             event.preventDefault();
             const to = event.key === 'ArrowUp' ? index - 1 : index + 2;
-            if (to >= 0 && to <= state.packet.length) update(moveItem(state.packet, index, to));
+            if (to >= 0 && to <= state.packet.length) setPacket(store, moveItem(state.packet, index, to));
           } else if (event.key === 'Delete' || event.key === 'Backspace') {
             event.preventDefault();
-            update(state.packet.filter((_, i) => i !== index));
+            setPacket(
+              store,
+              state.packet.filter((_, position) => position !== index),
+            );
+            // The next card takes its place; after the last one, the tile it went back to.
+            if (!focusNearest(list.querySelectorAll('.card'), index)) {
+              findByFocusKey(pool, tileFocusKey(option.id))?.focus();
+            }
           }
         });
         return row;
@@ -177,6 +213,14 @@ export function createOrderStep(store: Store<AppState>) {
 
   render(store.get());
   return { element, update: render };
+}
+
+/** Focuses the element now at `index`, or the one before it. Returns false when there's neither. */
+function focusNearest(elements: NodeListOf<Element>, index: number): boolean {
+  const target = elements[index] ?? elements[index - 1];
+  if (!(target instanceof HTMLElement)) return false;
+  target.focus();
+  return true;
 }
 
 /**

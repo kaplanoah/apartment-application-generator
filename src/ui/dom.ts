@@ -44,10 +44,15 @@ export function replaceChildren(parent: Element, ...children: Child[]): void {
   append(parent, ...children);
 }
 
+/** Finds the control marked with `data-focus-key`, which stays the same across re-renders. */
+export function findByFocusKey(region: Element, key: string): HTMLElement | null {
+  return region.querySelector<HTMLElement>(`[data-focus-key="${CSS.escape(key)}"]`);
+}
+
 /** Re-renders a region while keeping keyboard focus on the "same" control. */
 export function preservingFocus(region: Element, render: () => void): void {
   const active = document.activeElement;
   const key = active instanceof HTMLElement && region.contains(active) ? active.dataset.focusKey : undefined;
   render();
-  if (key) region.querySelector<HTMLElement>(`[data-focus-key="${CSS.escape(key)}"]`)?.focus();
+  if (key) findByFocusKey(region, key)?.focus();
 }
