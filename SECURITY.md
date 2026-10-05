@@ -22,9 +22,10 @@ These are checked automatically:
   `sendBeacon`, `localStorage`, cookies, `innerHTML`, `eval` and similar in the app code,
   and a test proves the rules catch them.
 - **Unit tests** cover the worker seal, the message checks and the generated policy.
-- **End-to-end tests** open the built file from disk in real browsers, build a packet, and
-  assert that the page made **zero** network requests, that `fetch` is blocked, and that
-  nothing was written to any browser storage.
+- **End-to-end tests** open the built file from disk in real browsers and fail if any test
+  makes a single network request. They check that the policy blocks `fetch`, that nothing
+  is written to any browser storage, and that the real PDF worker reaches only an approved
+  list of globals and can't even `import()` code from the internet.
 
 ## Check it yourself
 
@@ -49,6 +50,9 @@ These are checked automatically:
   anything anywhere, but code that builds the PDF can still decide what goes into it. The
   dependency is pinned to an exact version and checked against `package-lock.json`
   integrity hashes on install.
+- **Following a link.** The policy blocks requests, not navigation. The app's one link
+  ("Details", to this repository's security page) opens in a new tab only when you click it,
+  and the lint rules ban code that changes the page's location.
 - **Your documents folder.** It's protected only as well as your Mac is. FileVault (disk
   encryption) and, for iCloud Drive, Advanced Data Protection are worth turning on.
 

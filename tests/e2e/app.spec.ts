@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { test as base, expect, type Page, type Request } from '@playwright/test';
 import { PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import {
   encryptedPdf,
@@ -14,6 +14,32 @@ import {
 import { readPdf } from '../support/pdfText.ts';
 
 const APP_URL = new URL('../../dist/index.html', import.meta.url).href;
+
+/**
+ * Every test fails if anything but the app file itself is requested, by the page or
+ * the PDF worker, so network access anywhere in the app is caught whatever the test does.
+ */
+const test = base.extend<{ staysLocal: undefined }>({
+  staysLocal: [
+    async ({ context }, use) => {
+      const outside = new Set<Request>();
+      context.on('request', (request) => {
+        const url = request.url();
+        if (url !== APP_URL && !/^(blob|data):/.test(url)) outside.add(request);
+      });
+      // Some engines report a request the policy then blocks; those never left.
+      context.on('requestfailed', (request) => {
+        if (/csp|content security policy/i.test(request.failure()?.errorText ?? '')) outside.delete(request);
+      });
+      await use(undefined);
+      expect(
+        [...outside].map((request) => request.url()),
+        'requests for anything but the app file',
+      ).toEqual([]);
+    },
+    { auto: true },
+  ],
+});
 
 let workspace: string;
 let docsFolder: string;
@@ -134,21 +160,29 @@ test.afterAll(async () => {
   await rm(workspace, { recursive: true, force: true });
 });
 
-/** Opens the app and records anything that isn't the local file itself. */
+/** Opens the app on Oct 4, 2026 in New York, and records the errors it logs. */
 async function openApp(page: Page) {
-  const outside: string[] = [];
   const errors: string[] = [];
-  page.on('request', (request) => {
-    if (!/^(file|blob|data):/.test(request.url())) outside.push(request.url());
-  });
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.clock.setFixedTime(new Date('2026-10-04T12:00:00'));
+  await page.clock.setFixedTime(new Date('2026-10-04T12:00:00-04:00'));
   await page.goto(APP_URL);
-  return { outside, errors };
+  return { errors };
 }
+
+/** Globals of the sealed PDF worker that can't send or store anything, in Chromium and WebKit. */
+const SAFE_WORKER_GLOBALS = new Set([
+  ...['self', 'globalThis', 'constructor', 'name', 'location', 'origin', 'isSecureContext', 'crossOriginIsolated'],
+  ...['postMessage', 'close', 'addEventListener', 'removeEventListener', 'dispatchEvent', 'when', 'reportError'],
+  ...['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'scheduler'],
+  ...['requestAnimationFrame', 'cancelAnimationFrame', 'structuredClone', 'createImageBitmap'],
+  ...['atob', 'btoa', 'crypto', 'performance', 'console', 'trustedTypes'],
+  ...['parseInt', 'parseFloat', 'isNaN', 'isFinite', 'escape', 'unescape'],
+  ...['encodeURI', 'encodeURIComponent', 'decodeURI', 'decodeURIComponent'],
+  'eval', // blocked by the policy, which has no 'unsafe-eval'
+]);
 
 const chooseFolder = (page: Page, folder: string) => page.locator('#folder-input').setInputFiles(folder);
 const addTile = (page: Page, title: string) => page.getByRole('button', { name: `Add ${title}`, exact: true }).click();
@@ -156,7 +190,7 @@ const card = (page: Page, title: string) =>
   page.locator('.row').filter({ has: page.locator('.card-title', { hasText: title }) });
 
 test('says it is local-only and ships a strict no-network policy', async ({ page }) => {
-  const { outside, errors } = await openApp(page);
+  const { errors } = await openApp(page);
   await expect(page.getByRole('note')).toContainText('never connects to the internet');
 
   const policy = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
@@ -164,15 +198,19 @@ test('says it is local-only and ships a strict no-network policy', async ({ page
   expect(policy).toContain("connect-src 'none'");
   expect(policy).not.toContain('unsafe-inline');
 
-  // The browser itself refuses network access from the page.
-  const fetchResult = await page.evaluate(() =>
-    fetch('https://example.com/').then(
-      () => 'sent',
-      () => 'blocked',
-    ),
-  );
-  expect(fetchResult).toBe('blocked');
-  expect(outside).toEqual([]);
+  // The browser itself refuses network access from the page, because of the policy
+  // (not just because this machine might be offline).
+  const blockedBy = await page.evaluate(async () => {
+    const violation = new Promise<string>((resolve) =>
+      document.addEventListener('securitypolicyviolation', (event) => resolve(event.effectiveDirective)),
+    );
+    const sent = await fetch('https://example.com/').then(
+      () => true,
+      () => false,
+    );
+    return sent ? 'nothing' : violation;
+  });
+  expect(blockedBy).toBe('connect-src');
   expect(
     errors.filter(
       (e) => !e.includes('Content Security Policy') && !e.includes('Failed to fetch') && !e.includes('example.com'),
@@ -180,9 +218,57 @@ test('says it is local-only and ships a strict no-network policy', async ({ page
   ).toEqual([]);
 });
 
+test('the PDF worker has no way to reach the network or storage', async ({ page }) => {
+  // Hold the photo shrinking the worker asks the page for, so the worker stays alive
+  // until it has been inspected.
+  await page.addInitScript(() => {
+    const toBlob = HTMLCanvasElement.prototype.toBlob;
+    const released = new Promise((resolve) => Object.assign(window, { releaseShrinking: resolve }));
+    HTMLCanvasElement.prototype.toBlob = function (...args) {
+      void released.then(() => toBlob.apply(this, args));
+    };
+  });
+  await openApp(page);
+  await chooseFolder(page, photosFolder);
+  await addTile(page, 'Scanned ID');
+  await page.getByLabel('File size').selectOption({ label: 'Smaller' });
+  const workerPromise = page.waitForEvent('worker');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Generate PDF' }).click();
+  const worker = await workerPromise;
+
+  const inside = await worker.evaluate(async () => {
+    const names = new Set<string>();
+    for (let scope: object = globalThis; scope !== Object.prototype; scope = Object.getPrototypeOf(scope)) {
+      for (const name of Object.getOwnPropertyNames(scope)) names.add(name);
+    }
+    // Lower-case globals are the ways in and out (fetch, navigator, caches…). Upper-case
+    // ones are classes; the few that reach out by themselves are in the seal's blocklist.
+    // Event handler properties (onmessage…) can't send anything.
+    const entryPoints = [...names].filter(
+      (name) =>
+        /^[a-z]/.test(name) && !/^on[a-z]+$/.test(name) && (globalThis as Record<string, unknown>)[name] !== undefined,
+    );
+    // import() is syntax, so the seal can't remove it; the policy must block it instead.
+    const remoteModule = 'https://example.com/module.js';
+    const imported = await import(remoteModule).then(
+      () => true,
+      () => false,
+    );
+    return { entryPoints: entryPoints.sort(), imported };
+  });
+  await page.evaluate(() => (window as unknown as { releaseShrinking: () => void }).releaseShrinking());
+  await downloadPromise;
+
+  expect(inside.imported).toBe(false);
+  // A browser update that adds a new way out fails here, so it gets looked at before
+  // the seal is trusted with it. Add a name only once it's clear it can't send or store.
+  expect(inside.entryPoints.filter((name) => !SAFE_WORKER_GLOBALS.has(name))).toEqual([]);
+});
+
 test('builds a packet in the chosen order with cover, contents, links and footers', async ({ page }) => {
   test.slow(); // builds and reads back a 14-page packet
-  const { outside, errors } = await openApp(page);
+  const { errors } = await openApp(page);
   await page.getByRole('textbox', { name: 'Address' }).fill('123 Main St, Apt 4B');
 
   await chooseFolder(page, docsFolder);
@@ -241,16 +327,27 @@ test('builds a packet in the chosen order with cover, contents, links and footer
   expect(pdf.outline).toEqual(['Cover Letter', 'Pay Stubs', 'W-2s', 'Bank Statements']);
   expect(pdf.links[0]).toEqual([1, 2, 4, 8]);
 
-  // Nothing went over the network and nothing was stored.
-  expect(outside).toEqual([]);
+  // Nothing was stored (and the staysLocal fixture checks nothing went over the network).
   expect(errors).toEqual([]);
-  const stored = await page.evaluate(async () => ({
-    local: localStorage.length,
-    session: sessionStorage.length,
-    cookies: document.cookie,
-    databases: (await indexedDB.databases?.())?.length ?? 0,
-  }));
-  expect(stored).toEqual({ local: 0, session: 0, cookies: '', databases: 0 });
+  const stored = await page.evaluate(async () => {
+    const files = await navigator.storage?.getDirectory?.().then(
+      async (root) => {
+        const names: string[] = [];
+        for await (const name of (root as unknown as { keys(): AsyncIterable<string> }).keys()) names.push(name);
+        return names.length;
+      },
+      () => 0, // no private file system on this page at all
+    );
+    return {
+      local: localStorage.length,
+      session: sessionStorage.length,
+      cookies: document.cookie,
+      databases: (await indexedDB.databases()).length,
+      caches: typeof caches === 'undefined' ? 0 : (await caches.keys()).length,
+      files: files ?? 0,
+    };
+  });
+  expect(stored).toEqual({ local: 0, session: 0, cookies: '', databases: 0, caches: 0, files: 0 });
 });
 
 test('photos become upright pages, and the size choice shrinks big photos', async ({ page }) => {
@@ -388,18 +485,18 @@ test('cards can be reordered and removed with the keyboard or by dragging back',
   await chooseFolder(page, docsFolder);
   for (const title of ['Cover Letter', 'ID', 'Pets']) await addTile(page, title);
 
-  const titles = () => page.locator('.packet .card-title').allTextContents();
+  const titles = page.locator('.packet .card-title');
   await card(page, 'Pets').locator('.card').focus();
   await page.keyboard.press('Alt+ArrowUp');
-  expect(await titles()).toEqual(['Cover Letter', 'Pets', 'ID']);
+  await expect(titles).toHaveText(['Cover Letter', 'Pets', 'ID']);
   await expect(card(page, 'Pets').locator('.card')).toBeFocused();
 
   await page.keyboard.press('Delete');
-  expect(await titles()).toEqual(['Cover Letter', 'ID']);
+  await expect(titles).toHaveText(['Cover Letter', 'ID']);
 
   // Dragging a card back up to the tiles removes it too.
   await card(page, 'ID').locator('.card').dragTo(page.locator('.pool'));
-  expect(await titles()).toEqual(['Cover Letter']);
+  await expect(titles).toHaveText(['Cover Letter']);
   await expect(page.getByRole('button', { name: 'Add ID', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add Pets', exact: true })).toBeVisible();
 });

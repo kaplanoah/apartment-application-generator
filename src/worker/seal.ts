@@ -19,9 +19,17 @@ export const BLOCKED_GLOBALS = [
   'importScripts',
   'Worker',
   'SharedWorker',
+  // Loading resources by URL
+  'fonts',
+  'FontFace',
+  'Notification',
   // Storage and other channels
   'indexedDB',
   'caches',
+  'webkitRequestFileSystem',
+  'webkitRequestFileSystemSync',
+  'webkitResolveLocalFileSystemURL',
+  'webkitResolveLocalFileSystemSyncURL',
   'BroadcastChannel',
   'navigator',
 ] as const;
