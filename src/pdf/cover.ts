@@ -1,7 +1,7 @@
 import { rgb, type PDFDocument, type PDFFont, type PDFPage } from 'pdf-lib';
-import { formatDate, type CalendarDate } from '../core/calendar';
+import { formatLongMonthYear, type CalendarDate } from '../core/calendar';
 import { formatContactDetail, type Applicant } from '../core/contactInfo';
-import { COVER, layoutCover, type CoverLayout } from './coverLayout';
+import { CONTENTS_SPAN, COVER, layoutCover, type CoverLayout } from './coverLayout';
 import { LETTER } from './geometry';
 import { fitText } from './text';
 
@@ -75,7 +75,7 @@ export function drawCover(
   }
   write(
     first,
-    `Prepared ${formatDate(details.preparedOn)}`,
+    formatLongMonthYear(details.preparedOn),
     layout.prepared.x,
     layout.prepared.y,
     COVER.metaSize,
@@ -118,7 +118,7 @@ export function drawCover(
     );
   });
 
-  const right = COVER.marginX + COVER.contentWidth;
+  const right = CONTENTS_SPAN.right;
   const entryRows = entries.map((entry, i) => {
     const spot = layout.entries[i] as (typeof layout.entries)[number];
     const page = pageAt(spot.page);

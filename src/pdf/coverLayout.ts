@@ -10,6 +10,8 @@ export const COVER = {
   top: LETTER.height - 72,
   bottom: 72,
   contentWidth: LETTER.width - 144,
+  /** The contents list is inset on both sides so its lines stay short. */
+  contentsInset: 48,
   titleSize: 26,
   addressSize: 13,
   metaSize: 9,
@@ -23,6 +25,12 @@ export const COVER = {
   nameLeading: 15,
   detailLeading: 13,
   rowGap: 12,
+} as const;
+
+/** Horizontal span of the contents list. */
+export const CONTENTS_SPAN = {
+  left: COVER.marginX + COVER.contentsInset,
+  right: COVER.marginX + COVER.contentWidth - COVER.contentsInset,
 } as const;
 
 export interface CoverLayoutInput {
@@ -84,18 +92,19 @@ export function layoutCover(input: CoverLayoutInput): CoverLayout {
 
   const headings: Positioned[] = [];
   const entries: Positioned[] = [];
+  const contentsX = x + COVER.contentsInset;
   let page = 0;
   y -= 30;
-  headings.push({ page, x, y });
+  headings.push({ page, x: contentsX, y });
   y -= 26;
   for (let i = 0; i < input.entryCount; i++) {
     if (y < COVER.bottom) {
       page += 1;
       y = COVER.top - COVER.headingSize;
-      headings.push({ page, x, y });
+      headings.push({ page, x: contentsX, y });
       y -= 26;
     }
-    entries.push({ page, x, y });
+    entries.push({ page, x: contentsX, y });
     y -= COVER.entryHeight;
   }
 

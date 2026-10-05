@@ -1,4 +1,4 @@
-import { addMonths, endOfLastFullMonth, formatRange, type CalendarDate } from './calendar';
+import { addMonths, endOfLastFullMonth, type CalendarDate } from './calendar';
 import type { FolderOption } from './library';
 
 /** Which files of a folder go into the packet. */
@@ -52,16 +52,14 @@ export function clampCount(count: number): number {
   return Math.min(MAX_COUNT, Math.max(MIN_COUNT, Math.round(count)));
 }
 
-/** Short text for the contents page: "Aug 1 – Sep 30, 2026" or "last 2 each". */
-export function describeRange<F>(range: Range, option: FolderOption<F>, today: CalendarDate): string | null {
+/** Short text for the contents page: "last 2 months" or "last 2". */
+export function describeRange(range: Range): string | null {
   switch (range.kind) {
     case 'all':
       return null;
-    case 'months': {
-      const window = monthsWindow(range.count, range.through, today);
-      return formatRange(window.start, window.end);
-    }
+    case 'months':
+      return `last ${range.count} ${range.count === 1 ? 'month' : 'months'}`;
     case 'documents':
-      return `last ${range.count}${option.hasSubfolders ? ' each' : ''}`;
+      return `last ${range.count}`;
   }
 }

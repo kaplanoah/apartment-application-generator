@@ -100,12 +100,10 @@ describe('defaultRange and describeRange', () => {
   });
 
   it('describes ranges for the contents page', () => {
-    expect(describeRange({ kind: 'months', count: 2, through: 'last-full-month' }, STUBS, TODAY)).toBe(
-      'Aug 1 – Sep 30, 2026',
-    );
-    expect(describeRange({ kind: 'documents', count: 2 }, STUBS, TODAY)).toBe('last 2 each');
-    expect(describeRange({ kind: 'documents', count: 1 }, folderOf(['W/a_2025.pdf']), TODAY)).toBe('last 1');
-    expect(describeRange({ kind: 'all' }, STUBS, TODAY)).toBeNull();
+    expect(describeRange({ kind: 'months', count: 2, through: 'last-full-month' })).toBe('last 2 months');
+    expect(describeRange({ kind: 'months', count: 1, through: 'today' })).toBe('last 1 month');
+    expect(describeRange({ kind: 'documents', count: 2 })).toBe('last 2');
+    expect(describeRange({ kind: 'all' })).toBeNull();
   });
 
   it('clamps counts', () => {

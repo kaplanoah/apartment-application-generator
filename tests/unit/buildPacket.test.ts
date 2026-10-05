@@ -19,7 +19,7 @@ const cover: CoverDetails = {
     },
     { name: 'Zoë Łukasz 🙂', details: [{ label: 'Current address', value: '88 Elm St' }] },
   ],
-  footerText: 'For 123 Main St, Apt 4B application only · Oct 2026',
+  footerText: 'Alex Sample & Zoë · Application for 123 Main St, Apt 4B · Oct 2026',
   preparedOn: { year: 2026, month: 10, day: 4 },
 };
 
@@ -42,7 +42,7 @@ describe('buildPacket', () => {
         { title: 'Cover Letter', description: null, documents: [await pdfDoc('Cover Letter.pdf')] },
         {
           title: 'Pay Stubs',
-          description: 'Aug 1 – Sep 30, 2026',
+          description: 'last 2 months',
           documents: [await pdfDoc('stub A'), await pdfDoc('stub B', 2)],
         },
         {
@@ -67,7 +67,7 @@ describe('buildPacket', () => {
     for (const text of [
       'Rental Application',
       '123 Main St, Apt 4B',
-      'Prepared Oct 4, 2026',
+      'October 2026',
       'Alex Sample',
       'alex@example.com',
       '(555) 010-2481',
@@ -76,14 +76,14 @@ describe('buildPacket', () => {
     ]) {
       expect(front).toContain(text);
     }
-    expect(front).toMatch(/01 Cover Letter .*2 .*02 Pay Stubs .*Aug 1 – Sep 30, 2026 .*3 .*03 ID .*6/);
+    expect(front).toMatch(/01 Cover Letter .*2 .*02 Pay Stubs .*last 2 months .*3 .*03 ID .*6/);
     expect(pdf.pages[1]).toContain('Cover Letter.pdf');
     expect(pdf.pages[2]).toContain('stub A');
     expect(pdf.pages[3]).toContain('stub B');
 
     pdf.pages.forEach((text, i) => {
       expect(text).toContain(`Page ${i + 1} of 7`);
-      expect(text).toContain('For 123 Main St, Apt 4B application only · Oct 2026');
+      expect(text).toContain('Alex Sample & Zoë · Application for 123 Main St, Apt 4B · Oct 2026');
     });
     expect(pdf.outline).toEqual(['Cover Letter', 'Pay Stubs', 'ID']);
     expect(pdf.links[0]).toEqual([1, 2, 5]);

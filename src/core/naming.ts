@@ -4,14 +4,14 @@ const MAX_NAME_PART = 80;
 
 /**
  * The footer printed on every page, from the applicants and the address:
- * "Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B only · Oct 2026".
+ * "Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B · Oct 2026".
  * Naming the people, the apartment and the month makes reuse elsewhere obvious.
  */
 export function footerText(names: readonly string[], address: string, today: CalendarDate): string {
   const place = address.trim();
   return [
     joinNames(names.map((name) => name.trim()).filter(Boolean)),
-    place ? `Application for ${place} only` : 'Rental application',
+    place ? `Application for ${place}` : 'Rental application',
     formatMonthYear(today),
   ]
     .filter(Boolean)

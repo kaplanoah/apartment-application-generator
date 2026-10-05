@@ -26,7 +26,7 @@ describe('planPacket', () => {
     ];
     const sections = planPacket(library, items, TODAY);
     expect(sections.map((s) => [s.title, s.description, s.documents.map((d) => d.path)])).toEqual([
-      ['Pay Stubs', 'Aug 1 – Sep 30, 2026', ['2026-09-18.pdf']],
+      ['Pay Stubs', 'last 2 months', ['2026-09-18.pdf']],
       ['Cover Letter', null, ['Cover Letter.pdf']],
       ['ID', null, ['license.jpg']],
     ]);
@@ -61,9 +61,9 @@ describe('moveItem', () => {
 describe('naming', () => {
   it('builds the footer from the applicants and the address', () => {
     expect(footerText(['Alex Sample', 'Jordan Sample'], ' 123 Main St, Apt 4B ', TODAY)).toBe(
-      'Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B only · Oct 2026',
+      'Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B · Oct 2026',
     );
-    expect(footerText([], '1 Elm St', TODAY)).toBe('Application for 1 Elm St only · Oct 2026');
+    expect(footerText([], '1 Elm St', TODAY)).toBe('Application for 1 Elm St · Oct 2026');
     expect(footerText(['Alex Sample', ' '], '', TODAY)).toBe('Alex Sample · Rental application · Oct 2026');
   });
 

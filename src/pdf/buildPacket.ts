@@ -2,6 +2,7 @@ import { degrees, PDFDocument, StandardFonts, type PDFFont, type PDFPage } from 
 import { UserFacingError } from '../core/errors';
 import type { DocumentKind } from '../core/fileTypes';
 import { drawCover, planCover, type ContentsEntry, type CoverDetails } from './cover';
+import { CONTENTS_SPAN } from './coverLayout';
 import { stampFooters } from './footer';
 import { fitImage, pageSizeForImage } from './geometry';
 import type { PreparedImage } from './images';
@@ -114,7 +115,15 @@ export async function buildPacket(
 
   entryRows.forEach((row, i) => {
     const target = sectionStarts[i];
-    if (target) addPageLink(doc, row.page, { x: 70, y: row.y - 5, width: 472, height: 18 }, target);
+    if (target) {
+      const rect = {
+        x: CONTENTS_SPAN.left - 2,
+        y: row.y - 5,
+        width: CONTENTS_SPAN.right - CONTENTS_SPAN.left + 4,
+        height: 18,
+      };
+      addPageLink(doc, row.page, rect, target);
+    }
   });
   addOutline(
     doc,

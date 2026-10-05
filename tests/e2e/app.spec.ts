@@ -167,19 +167,26 @@ test('builds a packet in the chosen order with cover, contents, links and footer
   expect(pdf.title).toBe('Rental Application – 123 Main St, Apt 4B');
 
   const cover = pdf.pages[0] ?? '';
-  for (const text of ['Rental Application', '123 Main St, Apt 4B', 'Alex Sample', 'jordan@example.com', 'CONTENTS']) {
+  for (const text of [
+    'Rental Application',
+    '123 Main St, Apt 4B',
+    'October 2026',
+    'Alex Sample',
+    'jordan@example.com',
+    'CONTENTS',
+  ]) {
     expect(cover).toContain(text);
   }
   expect(cover).toMatch(/01 Cover Letter .*2/);
-  expect(cover).toMatch(/02 Pay Stubs .*last 1 each .*3/);
-  expect(cover).toMatch(/03 W-2s .*last 2 each .*5/);
-  expect(cover).toMatch(/04 Bank Statements .*Aug 1 – Sep 30, 2026 .*9/);
+  expect(cover).toMatch(/02 Pay Stubs .*last 1 .*3/);
+  expect(cover).toMatch(/03 W-2s .*last 2 .*5/);
+  expect(cover).toMatch(/04 Bank Statements .*last 2 months .*9/);
 
   expect(pdf.pages[1]).toContain('Cover Letter');
   expect(pdf.pages[2]).toContain('Pay Stub 2026-10-02'); // Alex's subfolder sorts first
   pdf.pages.forEach((text, i) => {
     expect(text).toContain(`Page ${i + 1} of 14`);
-    expect(text).toContain('Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B only · Oct 2026');
+    expect(text).toContain('Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B · Oct 2026');
   });
   expect(pdf.outline).toEqual(['Cover Letter', 'Pay Stubs', 'W-2s', 'Bank Statements']);
   expect(pdf.links[0]).toEqual([1, 2, 4, 8]);

@@ -86,6 +86,15 @@ export function formatRange(start: CalendarDate, end: CalendarDate): string {
     : `${formatDate(start)} – ${formatDate(end)}`;
 }
 
+/** "October 2026" */
+export function formatLongMonthYear(date: CalendarDate): string {
+  return new Date(Date.UTC(date.year, date.month - 1, 1)).toLocaleString('en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 /** "2026-10-04" */
 export function toIsoDate(date: CalendarDate): string {
   const pad = (value: number) => String(value).padStart(2, '0');

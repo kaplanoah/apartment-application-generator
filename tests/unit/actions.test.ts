@@ -43,9 +43,9 @@ describe('details', () => {
     const store = newStore();
     expect(currentFooter(store.get())).toBe('Rental application · Oct 2026');
     setAddress(store, '1 Elm St');
-    expect(currentFooter(store.get())).toBe('Application for 1 Elm St only · Oct 2026');
+    expect(currentFooter(store.get())).toBe('Application for 1 Elm St · Oct 2026');
     await loadFolder(store, sampleFolder());
-    expect(currentFooter(store.get())).toBe('Alex · Application for 1 Elm St only · Oct 2026');
+    expect(currentFooter(store.get())).toBe('Alex · Application for 1 Elm St · Oct 2026');
   });
 });
 
@@ -154,7 +154,7 @@ describe('generate', () => {
     expect(cover).toMatchObject({
       address: '123 Main St, Apt 4B',
       applicants: [{ name: 'Alex' }],
-      footerText: 'Alex · Application for 123 Main St, Apt 4B only · Oct 2026',
+      footerText: 'Alex · Application for 123 Main St, Apt 4B · Oct 2026',
     });
     expect(sections.map((s) => s.title)).toEqual(['Stubs', 'ID', 'Cover Letter']);
     expect(sections[1]?.documents[0]).toMatchObject({ kind: 'image', image: { format: 'jpg', turn: 0 } });

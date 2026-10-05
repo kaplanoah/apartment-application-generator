@@ -46,7 +46,7 @@ export function planPacket<F>(
     if (documents.length === 0) continue;
     sections.push({
       title: option.title,
-      description: option.kind === 'folder' ? describeRange(item.range, option, today) : null,
+      description: option.kind === 'folder' ? describeRange(item.range) : null,
       documents,
     });
   }
