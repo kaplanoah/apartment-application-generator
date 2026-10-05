@@ -1,6 +1,6 @@
 {
   "name": "apartment-packet-builder",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Build a single PDF rental-application packet from a folder of documents, entirely offline in your browser.",
   "repository": {

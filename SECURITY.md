@@ -33,8 +33,8 @@ These are checked automatically:
    Safari Settings → Advanced). The list stays empty while you use the app.
 3. Open the HTML file in a text editor: the first lines include the
    `Content-Security-Policy` with `connect-src 'none'`.
-4. If you downloaded a release, compare its SHA-256 with the checksum published next to
-   it: `shasum -a 256 apartment-packet-builder.html`.
+4. If you downloaded a release, compare its SHA-256 with the one in `SHA256SUMS` on the
+   same release page: `shasum -a 256 apartment-packet-builder.html`.
 
 ## What it can't protect against
 

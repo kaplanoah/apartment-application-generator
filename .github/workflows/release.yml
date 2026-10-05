@@ -1,7 +1,8 @@
 name: Release
 
-# Push a tag like v1.0.0 to publish the single HTML file, with its SHA-256
-# checksum, on the repository's Releases page.
+# Push a tag like v1.0.0 to publish the app on the repository's Releases page:
+# the single HTML file, a zip with the fake example folder, and their SHA-256
+# checksums. The tag must match the version in package.json.
 on:
   push:
     tags: ['v*']
@@ -19,6 +20,8 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      - name: Check the tag matches package.json
+        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
       - run: npm ci
       - run: npm run lint && npm run typecheck && npm run deadcode && npm test
       - run: npm run build
@@ -28,6 +31,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp dist/index.html apartment-packet-builder.html
-          sha256sum apartment-packet-builder.html > apartment-packet-builder.html.sha256
-          gh release create "$GITHUB_REF_NAME" apartment-packet-builder.html apartment-packet-builder.html.sha256 \
+          mkdir "Apartment Packet Builder"
+          cp apartment-packet-builder.html "Apartment Packet Builder/"
+          cp -R "example/Apartment Docs" "Apartment Packet Builder/Example Apartment Docs"
+          zip -qrX apartment-packet-builder.zip "Apartment Packet Builder"
+          sha256sum apartment-packet-builder.html apartment-packet-builder.zip > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" apartment-packet-builder.html apartment-packet-builder.zip SHA256SUMS \
             --title "$GITHUB_REF_NAME" --generate-notes
