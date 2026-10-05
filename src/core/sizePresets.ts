@@ -20,7 +20,7 @@ export const SIZE_PRESETS: readonly SizePreset[] = [
   {
     id: 'smaller',
     label: 'Smaller',
-    description: 'For email and upload limits. Photos and scans at about 110 dpi; IDs stay readable.',
+    description: 'For email and upload limits. Photos and scans at about 110 dpi. IDs stay readable.',
     maxImageEdge: 1150,
     jpegQuality: 0.72,
   },

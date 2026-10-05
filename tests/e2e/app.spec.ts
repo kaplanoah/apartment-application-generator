@@ -183,11 +183,11 @@ test('says it is local-only and ships a strict no-network policy', async ({ page
 test('builds a packet in the chosen order with cover, contents, links and footers', async ({ page }) => {
   test.slow(); // builds and reads back a 14-page packet
   const { outside, errors } = await openApp(page);
-  await page.getByLabel('Address').fill('123 Main St, Apt 4B');
+  await page.getByRole('textbox', { name: 'Address' }).fill('123 Main St, Apt 4B');
 
   await chooseFolder(page, docsFolder);
-  await expect(page.locator('.drop-status')).toContainText('“Apartment Docs”');
-  await expect(page.locator('.drop-status')).toContainText('contact info for 2 people');
+  await expect(page.locator('.folder-status')).toContainText('“Apartment Docs”');
+  await expect(page.locator('.folder-status')).toContainText('contact info for 2 people');
   await expect(page.locator('#contact-help')).toHaveCount(0);
   // Cover Letter.pages has its exported PDF beside it, so nothing asks for it.
   await expect(page.getByText('Save this as a PDF')).toHaveCount(0);
@@ -262,7 +262,7 @@ test('photos become upright pages, and the size choice shrinks big photos', asyn
 
   const results: { bytes: number; pages: { width: number; height: number }[] }[] = [];
   for (const label of ['High', 'Smaller']) {
-    await page.getByText(label, { exact: true }).click();
+    await page.getByLabel('File size').selectOption({ label });
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Generate PDF' }).click();
     const bytes = await readFile(await (await downloadPromise).path());
@@ -289,7 +289,7 @@ test('big photos inside PDFs, like scans, are shrunk too while the page stays th
 
   const sizes: number[] = [];
   for (const label of ['High', 'Smaller']) {
-    await page.getByText(label, { exact: true }).click();
+    await page.getByLabel('File size').selectOption({ label });
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Generate PDF' }).click();
     const bytes = await readFile(await (await downloadPromise).path());
@@ -311,7 +311,7 @@ test('repeated images are stored once, and big packets say where the size comes 
   await addTile(page, 'Bank Statements');
   await card(page, 'Bank Statements').getByLabel('Bank Statements: what to include').selectOption('all');
   await addTile(page, 'ID');
-  await page.getByText('High', { exact: true }).click();
+  await page.getByLabel('File size').selectOption({ label: 'High' });
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Generate PDF' }).click();
   const bytes = await readFile(await (await downloadPromise).path());
@@ -330,7 +330,7 @@ test('losslessly stored pictures, in PDFs and PNG files, become much smaller JPE
   test.slow(); // builds two packets from large images
   await openApp(page);
   await chooseFolder(page, losslessFolder);
-  await page.getByText('Smaller', { exact: true }).click();
+  await page.getByLabel('File size').selectOption({ label: 'Smaller' });
 
   for (const title of ['Exported ID', 'Screenshot']) {
     await addTile(page, title);
