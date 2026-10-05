@@ -90,7 +90,7 @@ jobs:
           name: apartment-packet-builder
           path: dist
       - run: npx playwright install --with-deps ${{ matrix.project == 'chromium' && '--only-shell chromium' || 'webkit' }}
-      - run: npx playwright test --project=${{ matrix.project }}
+      - run: npx playwright test --project=${{ matrix.project }} ${{ matrix.project == 'webkit' && '--repeat-each=20' || '' }}
       # The page as each failed test last saw it, so a failure can be understood from the log.
       - name: Show the page at each failure
         if: failure()
