@@ -5,11 +5,14 @@ import {
   PDFName,
   PDFNumber,
   PDFRawStream,
+  PDFRef,
+  PDFStream,
   type PDFDocument,
   type PDFObject,
 } from 'pdf-lib';
-import { readJpegOrientation, withoutExif } from './exif';
+import { readJpegOrientation, stripExif } from './exif';
 import { sniffImageFormat } from './images';
+import { readJpegSize } from './jpegSize';
 
 export interface ShrunkImage {
   readonly bytes: Uint8Array;
@@ -65,6 +68,7 @@ const NAME = {
   Columns: PDFName.of('Columns'),
   ImageMask: PDFName.of('ImageMask'),
   Mask: PDFName.of('Mask'),
+  SMask: PDFName.of('SMask'),
   Decode: PDFName.of('Decode'),
   BitsPerComponent: PDFName.of('BitsPerComponent'),
   ColorSpace: PDFName.of('ColorSpace'),
@@ -83,14 +87,16 @@ const NAME = {
  * drawings and everything else in the PDF are left exactly as they are.
  *
  * Handles 8-bit color and grayscale images stored as JPEG or losslessly (as
- * Pages, Word and "Save as PDF" do). Anything unusual (CMYK, color-key masks,
- * custom decoding, JPEG 2000) is kept as-is, and a re-encoded image replaces
- * the original only if it's a JPEG and smaller. Returns the number of bytes saved.
+ * Pages, Word and "Save as PDF" do). Anything unusual (CMYK, masks and soft
+ * masks, custom decoding, JPEG 2000) is kept as-is, and a re-encoded image
+ * replaces the original only if it's a JPEG and smaller. Returns the number of
+ * bytes saved.
  */
 export async function shrinkPdfImages(pdf: PDFDocument, limits: ImageLimits): Promise<number> {
+  const masks = findMasks(pdf);
   let saved = 0;
   for (const [ref, object] of pdf.context.enumerateIndirectObjects()) {
-    if (!(object instanceof PDFRawStream)) continue;
+    if (!(object instanceof PDFRawStream) || masks.has(ref)) continue;
     const image = describeImage(pdf, object.dict);
     if (!image) continue;
     const oversized = Math.max(image.width, image.height) > limits.maxEdge;
@@ -129,6 +135,22 @@ interface ImageInfo {
   readonly predictor: number;
 }
 
+/**
+ * Finds the images that hold another image's transparency. A soft mask looks like a plain
+ * grayscale image and is only known as one from the image that names it.
+ */
+function findMasks(pdf: PDFDocument): Set<PDFRef> {
+  const masks = new Set<PDFRef>();
+  for (const [, object] of pdf.context.enumerateIndirectObjects()) {
+    if (!(object instanceof PDFStream)) continue;
+    for (const key of [NAME.SMask, NAME.Mask]) {
+      const mask = object.dict.get(key);
+      if (mask instanceof PDFRef) masks.add(mask);
+    }
+  }
+  return masks;
+}
+
 /** Only a real JPEG under the size limit may replace the original. */
 function isUsableReplacement(shrunk: ShrunkImage | null, sizeLimit: number): shrunk is ShrunkImage {
   return (
@@ -146,76 +168,97 @@ function describeImage(pdf: PDFDocument, dict: PDFDict): ImageInfo | null {
   // Stencil and color-key masks depend on exact pixel values, which JPEG doesn't keep.
   if (lookup(pdf, dict.get(NAME.ImageMask)) !== undefined || dict.has(NAME.Mask)) return null;
   if (dict.has(NAME.Decode)) return null;
-  const bits = numberValue(pdf, dict.get(NAME.BitsPerComponent));
+  const bits = readNumber(pdf, dict.get(NAME.BitsPerComponent));
   if (bits !== undefined && bits !== 8) return null;
-  const channels = channelCount(pdf, lookup(pdf, dict.get(NAME.ColorSpace)));
-  const width = numberValue(pdf, dict.get(NAME.Width));
-  const height = numberValue(pdf, dict.get(NAME.Height));
+  const channels = countChannels(pdf, lookup(pdf, dict.get(NAME.ColorSpace)));
+  const width = readNumber(pdf, dict.get(NAME.Width));
+  const height = readNumber(pdf, dict.get(NAME.Height));
   if (!channels || !width || !height || !Number.isInteger(width) || !Number.isInteger(height)) return null;
   if (width * height > MAX_SHRINK_PIXELS) return null;
 
-  const filters = asList(pdf, dict.get(NAME.Filter));
-  const parms = asList(pdf, dict.get(NAME.DecodeParms));
-  const parmsAt = (i: number) => {
-    const value = parms[i];
+  const filters = readList(pdf, dict.get(NAME.Filter));
+  const parameters = readList(pdf, dict.get(NAME.DecodeParms));
+  /** A filter's parameters: a dictionary, null for none, or undefined for anything else. */
+  const readParameters = (index: number) => {
+    const value = parameters[index];
     return value instanceof PDFDict ? value : value === undefined || value.toString() === 'null' ? null : undefined;
   };
-  if (filters.length === 1 && filters[0] === NAME.DCTDecode && parmsAt(0) === null) {
+  if (filters.length === 1 && filters[0] === NAME.DCTDecode && readParameters(0) === null) {
     return { width, height, channels, encoding: 'jpeg', predictor: 1 };
   }
   if (filters.length === 2 && filters[0] === NAME.FlateDecode && filters[1] === NAME.DCTDecode) {
-    return parmsAt(0) === null && parmsAt(1) === null
+    return readParameters(0) === null && readParameters(1) === null
       ? { width, height, channels, encoding: 'compressed-jpeg', predictor: 1 }
       : null;
   }
   if (filters.length === 1 && filters[0] === NAME.FlateDecode) {
-    const predictor = flatePredictor(pdf, parmsAt(0), width, channels);
+    const predictor = readFlatePredictor(pdf, readParameters(0), width, channels);
     return predictor === null ? null : { width, height, channels, encoding: 'lossless', predictor };
   }
   return null;
 }
 
 /** The PNG predictor in use (1 for none), or null when the parameters aren't the plain kind. */
-function flatePredictor(pdf: PDFDocument, parms: PDFDict | null | undefined, width: number, channels: number) {
-  if (parms === null) return 1;
-  if (parms === undefined) return null;
-  const predictor = numberValue(pdf, parms.get(NAME.Predictor)) ?? 1;
+function readFlatePredictor(
+  pdf: PDFDocument,
+  parameters: PDFDict | null | undefined,
+  width: number,
+  channels: number,
+): number | null {
+  if (parameters === null) return 1;
+  if (parameters === undefined) return null;
+  const predictor = readNumber(pdf, parameters.get(NAME.Predictor)) ?? 1;
   if (predictor === 1) return 1;
   if (predictor < 10 || predictor > 15) return null; // TIFF predictors aren't handled
-  const colors = numberValue(pdf, parms.get(NAME.Colors)) ?? 1;
-  const bits = numberValue(pdf, parms.get(NAME.BitsPerComponent)) ?? 8;
-  const columns = numberValue(pdf, parms.get(NAME.Columns)) ?? 1;
+  const colors = readNumber(pdf, parameters.get(NAME.Colors)) ?? 1;
+  const bits = readNumber(pdf, parameters.get(NAME.BitsPerComponent)) ?? 8;
+  const columns = readNumber(pdf, parameters.get(NAME.Columns)) ?? 1;
   return colors === channels && bits === 8 && columns === width ? predictor : null;
 }
 
-/** Unpacks the image's data for re-encoding, or returns null if it isn't what it claims. */
+/**
+ * Unpacks the image's data for re-encoding, or returns null if it isn't what it claims.
+ * Unpacking stops at about the size its dictionary states, which describeImage keeps within
+ * MAX_SHRINK_PIXELS (pdf-lib unpacks a whole compressed block at a time, so it can go past by
+ * one block). A JPEG's own size must match the dictionary too, since the page decodes it.
+ */
 function readImageSource(pdf: PDFDocument, stream: PDFRawStream, image: ImageInfo): ImageSource | null {
+  const rowLength = image.width * image.channels;
   try {
     if (image.encoding !== 'lossless') {
-      const jpeg = image.encoding === 'compressed-jpeg' ? inflate(pdf, stream.contents) : stream.contents;
-      if (sniffImageFormat(jpeg) !== 'jpg') return null;
+      // A JPEG takes less room than its raw pixels; one that doesn't isn't worth unpacking.
+      const jpeg =
+        image.encoding === 'compressed-jpeg'
+          ? inflate(pdf, stream.contents, rowLength * image.height)
+          : stream.contents;
+      if (!jpeg || sniffImageFormat(jpeg) !== 'jpg') return null;
+      const size = readJpegSize(jpeg);
+      const matchesDictionary =
+        size !== null &&
+        size.width === image.width &&
+        size.height === image.height &&
+        size.components === image.channels;
+      if (!matchesDictionary) return null;
       // PDF viewers ignore a JPEG's rotation tag and browsers apply it: decode it as viewers do.
-      return { kind: 'jpeg', bytes: readJpegOrientation(jpeg) === 1 ? jpeg : withoutExif(jpeg) };
+      return { kind: 'jpeg', bytes: readJpegOrientation(jpeg) === 1 ? jpeg : stripExif(jpeg) };
     }
-    const rowLength = image.width * image.channels;
-    const data = inflate(pdf, stream.contents);
+    // With a PNG predictor, each row starts with a filter type byte.
+    const dataLength = (image.predictor === 1 ? rowLength : rowLength + 1) * image.height;
+    const data = inflate(pdf, stream.contents, dataLength);
+    if (!data || data.byteLength !== dataLength) return null;
     const pixels = image.predictor === 1 ? data : undoPngPredictor(data, rowLength, image.channels, image.height);
-    if (!pixels || pixels.byteLength < rowLength * image.height) return null;
-    return {
-      kind: 'pixels',
-      bytes: pixels.subarray(0, rowLength * image.height),
-      width: image.width,
-      height: image.height,
-      channels: image.channels,
-    };
+    if (!pixels) return null;
+    return { kind: 'pixels', bytes: pixels, width: image.width, height: image.height, channels: image.channels };
   } catch {
     return null;
   }
 }
 
-function inflate(pdf: PDFDocument, contents: Uint8Array): Uint8Array {
+/** Unpacks Flate data, or returns null once it comes to more than `maxLength` bytes. */
+function inflate(pdf: PDFDocument, contents: Uint8Array, maxLength: number): Uint8Array | null {
   const dict = pdf.context.obj({ Filter: NAME.FlateDecode });
-  return decodePDFRawStream(PDFRawStream.of(dict, contents)).decode();
+  const data = decodePDFRawStream(PDFRawStream.of(dict, contents)).getBytes(maxLength + 1);
+  return data.byteLength > maxLength ? null : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 }
 
 /**
@@ -249,7 +292,7 @@ function undoPngPredictor(data: Uint8Array, rowLength: number, bytesPerPixel: nu
           predicted = (left + up) >> 1;
           break;
         case 4:
-          predicted = paeth(left, up, upLeft);
+          predicted = predictPaeth(left, up, upLeft);
           break;
         default:
           return null;
@@ -260,7 +303,7 @@ function undoPngPredictor(data: Uint8Array, rowLength: number, bytesPerPixel: nu
   return out;
 }
 
-function paeth(left: number, up: number, upLeft: number): number {
+function predictPaeth(left: number, up: number, upLeft: number): number {
   const estimate = left + up - upLeft;
   const toLeft = Math.abs(estimate - left);
   const toUp = Math.abs(estimate - up);
@@ -269,19 +312,19 @@ function paeth(left: number, up: number, upLeft: number): number {
   return toUp <= toUpLeft ? up : upLeft;
 }
 
-function channelCount(pdf: PDFDocument, space: PDFObject | undefined): 1 | 3 | null {
+function countChannels(pdf: PDFDocument, space: PDFObject | undefined): 1 | 3 | null {
   if (space === NAME.DeviceGray) return 1;
   if (space === NAME.DeviceRGB) return 3;
   if (space instanceof PDFArray && space.size() === 2 && lookup(pdf, space.get(0)) === NAME.ICCBased) {
     const profile = lookup(pdf, space.get(1));
-    const channels = profile instanceof PDFRawStream ? numberValue(pdf, profile.dict.get(NAME.N)) : undefined;
+    const channels = profile instanceof PDFRawStream ? readNumber(pdf, profile.dict.get(NAME.N)) : undefined;
     return channels === 1 || channels === 3 ? channels : null;
   }
   return null;
 }
 
 /** A filter or parameter entry as a list: a single value, an array's items, or nothing. */
-function asList(pdf: PDFDocument, value: PDFObject | undefined): PDFObject[] {
+function readList(pdf: PDFDocument, value: PDFObject | undefined): PDFObject[] {
   const resolved = lookup(pdf, value);
   if (resolved === undefined) return [];
   if (resolved instanceof PDFArray) return resolved.asArray().map((item) => lookup(pdf, item) ?? item);
@@ -291,7 +334,7 @@ function asList(pdf: PDFDocument, value: PDFObject | undefined): PDFObject[] {
 const lookup = (pdf: PDFDocument, value: PDFObject | undefined): PDFObject | undefined =>
   value === undefined ? undefined : pdf.context.lookup(value);
 
-function numberValue(pdf: PDFDocument, value: PDFObject | undefined): number | undefined {
+function readNumber(pdf: PDFDocument, value: PDFObject | undefined): number | undefined {
   const resolved = lookup(pdf, value);
   return resolved instanceof PDFNumber ? resolved.asNumber() : undefined;
 }

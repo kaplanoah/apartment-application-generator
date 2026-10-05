@@ -3,7 +3,7 @@ import { CONTACT_FILE_EXAMPLE, CONTACT_FILE_NAME } from '../core/contactInfo';
 import { loadFolder } from './actions';
 import { h, replaceChildren } from './dom';
 import type { AppState } from './state';
-import type { Store } from './store';
+import { hasChanged, type Store } from './store';
 
 /** Step 2: choose the documents folder, with clear feedback on problems. */
 export function createFolderStep(store: Store<AppState>) {
@@ -20,16 +20,23 @@ export function createFolderStep(store: Store<AppState>) {
     // picked again) empties it.
     const files = Array.from(input.files ?? []);
     input.value = '';
-    if (files.length > 0)
-      void loadFolder(
-        store,
-        Promise.resolve().then(() => folderFromInput(files)),
-      );
+    // An empty folder arrives as no files at all; reading it explains that.
+    void loadFolder(
+      store,
+      Promise.resolve().then(() => folderFromInput(files)),
+    );
   });
 
   const chooseButton = h(
     'button',
-    { type: 'button', class: 'button primary', onclick: () => input.click() },
+    {
+      type: 'button',
+      class: 'button primary',
+      onclick: () => {
+        store.update({ folderError: null });
+        input.click();
+      },
+    },
     'Choose folder…',
   );
   const status = h('div', { class: 'folder-status', 'aria-live': 'polite' });
@@ -71,31 +78,40 @@ export function createFolderStep(store: Store<AppState>) {
     feedback,
   );
 
-  function update(state: AppState): void {
+  function update(state: AppState, previous?: AppState): void {
+    if (hasChanged(state, previous, 'folderLoading', 'folder', 'folderError')) renderStatus(state);
+    if (hasChanged(state, previous, 'folder', 'folderError')) renderFeedback(state);
+  }
+
+  function renderStatus(state: AppState): void {
+    const folderName = state.folder && h('span', { class: 'folder-name' }, state.folder.name);
     if (state.folderLoading) {
       replaceChildren(status, 'Reading folder…');
-    } else if (state.folder) {
-      replaceChildren(status, h('span', { class: 'folder-name' }, state.folder.name));
+    } else if (folderName && state.folderError) {
+      replaceChildren(status, 'Still using ', folderName);
     } else {
-      replaceChildren(status);
+      replaceChildren(status, folderName);
     }
+  }
 
+  function renderFeedback(state: AppState): void {
     const ignored = state.folder?.library.ignored ?? [];
     const needPdf = ignored.filter((item) => item.reason === 'needs-pdf');
     const unused = ignored.filter((item) => item.reason !== 'needs-pdf');
+    // Problems with the last folder chosen come first; the notes below are
+    // about the folder still in use, so they stay.
     replaceChildren(
       feedback,
-      !state.folderError && contactNotice(state),
       state.folderError &&
         h(
           'div',
           { class: 'notice error', role: 'alert' },
           h('p', null, state.folderError.message),
           state.folderError.details.length > 0 &&
-            h('ul', null, ...state.folderError.details.map((d) => h('li', null, d))),
+            h('ul', null, ...state.folderError.details.map((detail) => h('li', null, detail))),
         ),
-      !state.folderError &&
-        needPdf.length > 0 &&
+      contactNotice(state),
+      needPdf.length > 0 &&
         h(
           'div',
           { class: 'notice warn', role: 'status' },
@@ -109,8 +125,7 @@ export function createFolderStep(store: Store<AppState>) {
           ),
           h('p', null, 'Keep the PDF next to the original with the same name, then add the folder again.'),
         ),
-      !state.folderError &&
-        unused.length > 0 &&
+      unused.length > 0 &&
         h(
           'p',
           { class: 'faint' },

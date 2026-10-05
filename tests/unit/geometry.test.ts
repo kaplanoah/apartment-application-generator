@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { fitImage, normalizeQuarterTurn, pageSizeForImage, visibleSize, visibleToPage } from '../../src/pdf/geometry';
+import {
+  choosePageSizeForImage,
+  fitImage,
+  mapVisiblePointToPage,
+  measureVisibleSize,
+  normalizeQuarterTurn,
+} from '../../src/pdf/geometry';
 
 describe('page geometry', () => {
   const box = { x: 10, y: 20, width: 600, height: 800 };
@@ -11,19 +17,19 @@ describe('page geometry', () => {
   });
 
   it('swaps width and height for sideways pages', () => {
-    expect(visibleSize(box, 0)).toEqual({ width: 600, height: 800 });
-    expect(visibleSize(box, 90)).toEqual({ width: 800, height: 600 });
+    expect(measureVisibleSize(box, 0)).toEqual({ width: 600, height: 800 });
+    expect(measureVisibleSize(box, 90)).toEqual({ width: 800, height: 600 });
   });
 
   it('maps the visible bottom-left corner for every rotation', () => {
     // The visible bottom-left corner of a page rotated clockwise by /Rotate:
-    expect(visibleToPage(box, 0, 0, 0)).toEqual({ x: 10, y: 20, rotate: 0 });
-    expect(visibleToPage(box, 90, 0, 0)).toEqual({ x: 610, y: 20, rotate: 90 });
-    expect(visibleToPage(box, 180, 0, 0)).toEqual({ x: 610, y: 820, rotate: 180 });
-    expect(visibleToPage(box, 270, 0, 0)).toEqual({ x: 10, y: 820, rotate: 270 });
+    expect(mapVisiblePointToPage(box, 0, 0, 0)).toEqual({ x: 10, y: 20, rotate: 0 });
+    expect(mapVisiblePointToPage(box, 90, 0, 0)).toEqual({ x: 610, y: 20, rotate: 90 });
+    expect(mapVisiblePointToPage(box, 180, 0, 0)).toEqual({ x: 610, y: 820, rotate: 180 });
+    expect(mapVisiblePointToPage(box, 270, 0, 0)).toEqual({ x: 10, y: 820, rotate: 270 });
     // Moving right along the visible bottom edge:
-    expect(visibleToPage(box, 90, 100, 20)).toEqual({ x: 590, y: 120, rotate: 90 });
-    expect(visibleToPage(box, 270, 100, 20)).toEqual({ x: 30, y: 720, rotate: 270 });
+    expect(mapVisiblePointToPage(box, 90, 100, 20)).toEqual({ x: 590, y: 120, rotate: 90 });
+    expect(mapVisiblePointToPage(box, 270, 100, 20)).toEqual({ x: 30, y: 720, rotate: 270 });
   });
 
   it('fits images centered without distortion', () => {
@@ -43,8 +49,8 @@ describe('page geometry', () => {
   });
 
   it('chooses page orientation from how the photo is shown', () => {
-    expect(pageSizeForImage(400, 300, 0)).toEqual({ width: 792, height: 612 });
-    expect(pageSizeForImage(400, 300, 90)).toEqual({ width: 612, height: 792 });
-    expect(pageSizeForImage(300, 400, 0)).toEqual({ width: 612, height: 792 });
+    expect(choosePageSizeForImage(400, 300, 0)).toEqual({ width: 792, height: 612 });
+    expect(choosePageSizeForImage(400, 300, 90)).toEqual({ width: 612, height: 792 });
+    expect(choosePageSizeForImage(300, 400, 0)).toEqual({ width: 612, height: 792 });
   });
 });

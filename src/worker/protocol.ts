@@ -1,5 +1,6 @@
 import type { CoverDetails } from '../pdf/cover';
 import type { PacketSection } from '../pdf/buildPacket';
+import { readJpegSize } from '../pdf/jpegSize';
 import { MAX_SHRINK_PIXELS, type ImageSource, type ShrunkImage } from '../pdf/shrinkImages';
 
 /** Messages between the page and the sealed PDF worker. */
@@ -51,12 +52,18 @@ export type WorkerResponse =
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
 
-/** Pixels must be exactly as many as their stated size, and within the size the page will draw. */
+/**
+ * A JPEG must state a size the page will draw. Pixels must be exactly as many as their stated
+ * size, and within that size too.
+ */
 function isImageSource(value: unknown): value is ImageSource {
   if (typeof value !== 'object' || value === null) return false;
   const source = value as Record<string, unknown>;
   if (!(source.bytes instanceof Uint8Array)) return false;
-  if (source.kind === 'jpeg') return true;
+  if (source.kind === 'jpeg') {
+    const size = readJpegSize(source.bytes);
+    return size !== null && size.width * size.height <= MAX_SHRINK_PIXELS;
+  }
   if (source.kind !== 'pixels') return false;
   const { width, height, channels } = source;
   return (

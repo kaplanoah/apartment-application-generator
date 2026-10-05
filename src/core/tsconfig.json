@@ -1,0 +1,6 @@
+{
+  // Pure logic: no browser or Node.js APIs, so it stays fast to test (see AGENTS.md).
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "lib": ["ES2023"], "types": [] },
+  "include": ["."]
+}

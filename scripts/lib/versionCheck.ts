@@ -3,15 +3,16 @@
  * publishes a release, and whether it should have bumped the version.
  */
 
-/** Paths that end up in the built app; changing them changes what people download. */
-const APP_PATHS = [/^src\//, /^build\//, /^index\.html$/, /^vite\.config\.ts$/];
-
 export interface VersionCheckInput {
   readonly baseVersion: string;
   readonly headVersion: string;
   /** The version recorded in package-lock.json, which must match package.json. */
   readonly lockVersion: string;
-  readonly changedFiles: readonly string[];
+  /**
+   * Whether the built file differs from the base branch's. This catches every change
+   * people would download, including dependency upgrades, and nothing else.
+   */
+  readonly appChanged: boolean;
 }
 
 export interface VersionCheckResult {
@@ -28,7 +29,7 @@ export function checkVersion({
   baseVersion,
   headVersion,
   lockVersion,
-  changedFiles,
+  appChanged,
 }: VersionCheckInput): VersionCheckResult {
   const base = parseVersion(baseVersion);
   const head = parseVersion(headVersion);
@@ -54,19 +55,17 @@ export function checkVersion({
     };
   }
 
-  const appChanges = changedFiles.filter((file) => APP_PATHS.some((pattern) => pattern.test(file)));
-  if (appChanges.length > 0) {
-    const shown = appChanges.slice(0, 3).join(', ') + (appChanges.length > 3 ? ', …' : '');
+  if (appChanged) {
     return {
       ok: false,
       releases: null,
-      message: `This changes the app (${shown}) but keeps version ${headVersion}. ${BUMP_HELP}`,
+      message: `This changes the built app but keeps version ${headVersion}. ${BUMP_HELP}`,
     };
   }
   return {
     ok: true,
     releases: null,
-    message: `Merging this doesn't release a new version: only docs, tests or tooling change.`,
+    message: `Merging this doesn't release a new version: the built app stays the same.`,
   };
 }
 
@@ -78,8 +77,8 @@ function parseVersion(text: string): Version | null {
 }
 
 function compareVersions(a: Version, b: Version): number {
-  for (let i = 0; i < 3; i++) {
-    const difference = (a[i] as number) - (b[i] as number);
+  for (let index = 0; index < 3; index++) {
+    const difference = (a[index] as number) - (b[index] as number);
     if (difference !== 0) return Math.sign(difference);
   }
   return 0;

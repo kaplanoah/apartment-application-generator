@@ -25,3 +25,8 @@ export class Store<S extends object> {
     return () => this.listeners.delete(listener);
   }
 }
+
+/** True on the first render (no previous state), or when any of `keys` holds a new value. */
+export function hasChanged<S extends object>(state: S, previous: S | undefined, ...keys: (keyof S)[]): boolean {
+  return !previous || keys.some((key) => state[key] !== previous[key]);
+}

@@ -1,7 +1,10 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { buildPolicy, CSP_PLACEHOLDER, inlineSingleFile } from '../../build/inlineSingleFile';
 import { BLOCKED_GLOBALS, exposedGlobals, sealScope } from '../../src/worker/seal';
 import { isWorkerResponse } from '../../src/worker/protocol';
+import { sampleIdJpeg } from '../../scripts/lib/sampleDocs';
+import { withJpegSize } from '../support/jpeg';
 
 describe('worker seal', () => {
   /** Mimics a worker global: APIs live on the prototype, constructors on the object. */
@@ -46,6 +49,8 @@ describe('worker seal', () => {
       'WebTransport',
       'importScripts',
       'RTCPeerConnection',
+      'FontFace',
+      'webkitRequestFileSystem',
     ]) {
       expect(BLOCKED_GLOBALS).toContain(name);
     }
@@ -77,8 +82,10 @@ describe('worker messages', () => {
     expect(isWorkerResponse({ type: 'error', message: 'x', details: [], expected: true })).toBe(true);
     const shrink = (source: unknown, id = 1) =>
       isWorkerResponse({ type: 'shrink-image', id, source, maxEdge: 1600, quality: 0.8 });
-    expect(shrink({ kind: 'jpeg', bytes: new Uint8Array() })).toBe(true);
-    expect(shrink({ kind: 'jpeg', bytes: new Uint8Array() }, 1.5)).toBe(false);
+    expect(shrink({ kind: 'jpeg', bytes: sampleIdJpeg() })).toBe(true);
+    expect(shrink({ kind: 'jpeg', bytes: sampleIdJpeg() }, 1.5)).toBe(false);
+    expect(shrink({ kind: 'jpeg', bytes: new Uint8Array() })).toBe(false); // no size to check
+    expect(shrink({ kind: 'jpeg', bytes: withJpegSize(sampleIdJpeg(), 60_000, 60_000) })).toBe(false); // too big to draw
     expect(shrink({ kind: 'jpeg', bytes: 'x' })).toBe(false);
     const pixels = { kind: 'pixels', bytes: new Uint8Array(2 * 3 * 3), width: 2, height: 3, channels: 3 };
     expect(shrink(pixels)).toBe(true);
@@ -101,6 +108,8 @@ describe('worker messages', () => {
 });
 
 describe('single-file build and content security policy', () => {
+  const sha256 = (text: string) => `sha256-${createHash('sha256').update(text, 'utf8').digest('base64')}`;
+
   it('forbids all network access and allows only the inlined code', () => {
     const policy = buildPolicy(['sha256-abc'], ['sha256-def']);
     expect(policy).toContain("default-src 'none'");
@@ -142,27 +151,48 @@ describe('single-file build and content security policy', () => {
     expect(html).toContain('<script type="module">console.log("<\\/script>")</script>');
     expect(html).toContain('<style>body{color:red}</style>');
     expect(html).not.toContain(CSP_PLACEHOLDER);
-    expect(html).toMatch(/script-src 'sha256-[A-Za-z0-9+/=]+'/);
+    // The hashes must be of exactly the inlined text, after escaping, or the browser blocks it.
+    const script = /<script type="module">(.*?)<\/script>/s.exec(html)?.[1] ?? '';
+    const style = /<style>(.*?)<\/style>/s.exec(html)?.[1] ?? '';
+    expect(html).toContain(`script-src '${sha256(script)}'`);
+    expect(html).toContain(`style-src '${sha256(style)}'`);
   });
 });
 
 describe('lint rules guarding the app code', () => {
-  it('reject network, storage and HTML-parsing APIs in src/', async () => {
+  it('reject network, storage, navigation and HTML-parsing APIs in src/', async () => {
     const { ESLint } = await import('eslint');
-    const eslint = new ESLint();
+    // The snippets aren't files on disk, so lint them without type information.
+    const eslint = new ESLint({
+      overrideConfig: {
+        languageOptions: { parserOptions: { projectService: false } },
+        rules: { '@typescript-eslint/no-floating-promises': 'off', '@typescript-eslint/no-misused-promises': 'off' },
+      },
+    });
     const offenders = [
       "fetch('https://example.com');",
+      "self.fetch('https://example.com');",
       "navigator.sendBeacon('/x', 'data');",
+      'navigator.storage.getDirectory();',
+      'navigator.serviceWorker.register;',
       "localStorage.setItem('k', 'v');",
+      "globalThis.indexedDB.open('x');",
+      "cookieStore.set('k', 'v');",
       "document.body.innerHTML = '<b>x</b>';",
       'document.cookie;',
       "window.open('https://example.com');",
+      "open('https://example.com');",
+      "location.href = 'https://example.com';",
+      "window.location.assign('https://example.com');",
+      "document.location = 'https://example.com';",
       "new WebSocket('wss://example.com');",
       "eval('1');",
     ];
     for (const code of offenders) {
       const [result] = await eslint.lintText(`export {};\n${code}\n`, { filePath: 'src/ui/example.ts' });
-      expect(result?.errorCount, code).toBeGreaterThan(0);
+      const rules = result?.messages.map((message) => message.ruleId) ?? [];
+      expect(rules, code).toEqual(expect.arrayContaining([expect.stringMatching(/^no-(restricted-\w+|eval)$/)]));
+      expect(rules, code).not.toContain(null); // a parsing error would pass the check above vacuously
     }
   });
 });

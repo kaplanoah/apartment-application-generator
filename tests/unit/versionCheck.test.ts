@@ -5,36 +5,30 @@ const input = (overrides: Partial<Parameters<typeof checkVersion>[0]> = {}) => (
   baseVersion: '1.0.0',
   headVersion: '1.0.0',
   lockVersion: '1.0.0',
-  changedFiles: ['README.md'],
+  appChanged: false,
   ...overrides,
 });
 
 describe('checkVersion', () => {
   it('says which version merging releases', () => {
-    const result = checkVersion(input({ headVersion: '1.1.0', lockVersion: '1.1.0', changedFiles: ['src/ui/app.ts'] }));
+    const result = checkVersion(input({ headVersion: '1.1.0', lockVersion: '1.1.0', appChanged: true }));
     expect(result).toEqual({ ok: true, releases: 'v1.1.0', message: 'Merging this releases v1.1.0 (now v1.0.0).' });
   });
 
-  it('passes docs, tests and tooling without a release', () => {
-    const result = checkVersion(
-      input({ changedFiles: ['README.md', 'tests/unit/a.test.ts', '.github/workflows/ci.yml'] }),
-    );
-    expect(result.ok).toBe(true);
-    expect(result.releases).toBeNull();
+  it('passes changes that leave the built app the same, without a release', () => {
+    const result = checkVersion(input({ appChanged: false }));
+    expect(result).toEqual({
+      ok: true,
+      releases: null,
+      message: "Merging this doesn't release a new version: the built app stays the same.",
+    });
   });
 
-  it('fails when the app changes but the version stays the same', () => {
-    for (const file of ['src/ui/app.ts', 'build/inlineSingleFile.ts', 'index.html', 'vite.config.ts']) {
-      const result = checkVersion(input({ changedFiles: ['README.md', file] }));
-      expect(result.ok).toBe(false);
-      expect(result.message).toContain(file);
-      expect(result.message).toContain('npm version patch');
-    }
-  });
-
-  it('lists only the first few changed app files', () => {
-    const changedFiles = ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts'];
-    expect(checkVersion(input({ changedFiles })).message).toContain('src/a.ts, src/b.ts, src/c.ts, …');
+  it('fails when the built app changes but the version stays the same', () => {
+    const result = checkVersion(input({ appChanged: true }));
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('changes the built app but keeps version 1.0.0');
+    expect(result.message).toContain('npm version patch');
   });
 
   it('fails when the version goes backwards or is malformed', () => {

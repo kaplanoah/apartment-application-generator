@@ -1,0 +1,6 @@
+{
+  // App code runs in the browser: no Node.js types here.
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "types": ["vite/client"] },
+  "include": ["."]
+}

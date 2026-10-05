@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { UserFacingError } from '../../src/core/errors';
-import { newPacketItem } from '../../src/core/packet';
+import { newPacketItem, planPacket } from '../../src/core/packet';
 import type { PickedFolder } from '../../src/browser/readFolder';
-import { generate, loadFolder, setAddress, type Services } from '../../src/ui/actions';
+import { generate, loadFolder, setAddress, setPacket, setSizePreset, type Services } from '../../src/ui/actions';
 import { currentFooter, initialState, type AppState } from '../../src/ui/state';
 import { Store } from '../../src/ui/store';
 import { prepareImageAsIs } from '../../src/pdf/images';
@@ -34,7 +34,7 @@ function fakeServices(): Services & { saved: { bytes: Uint8Array; fileName: stri
       onProgress(1, 1);
       return {
         bytes: new Uint8Array(1234),
-        pageCount: 1 + sections.reduce((n, s) => n + s.documents.length, 0),
+        pageCount: 1 + sections.reduce((sum, section) => sum + section.documents.length, 0),
         sectionBytes: sections.map(() => 0),
         cleanupSavings: 0,
       };
@@ -77,6 +77,23 @@ describe('loadFolder', () => {
     });
     await loadFolder(store, sampleFolder());
     expect(store.get().packet.map((item) => item.optionId)).toEqual(['Stubs/', 'Cover Letter.pdf']);
+  });
+
+  it('starts a kept folder over when its range no longer applies', async () => {
+    const store = newStore();
+    await loadFolder(store, sampleFolder());
+    const stubs = store.get().folder?.library.options.find((option) => option.title === 'Stubs');
+    setPacket(store, [newPacketItem(stubs!)]);
+    expect(store.get().packet[0]?.range.kind).toBe('months');
+
+    // The same folder again, but its file no longer has a date in the name.
+    await loadFolder(
+      store,
+      Promise.resolve({ name: 'Docs', entries: [{ path: ['Stubs', 'latest.pdf'], file: file('latest.pdf', 'x') }] }),
+    );
+    expect(store.get().packet).toEqual([{ optionId: 'Stubs/', range: { kind: 'all' } }]);
+    const { folder, packet, today } = store.get();
+    expect(planPacket(folder!.library, packet, today).map((section) => section.title)).toEqual(['Stubs']);
   });
 
   it('reports a missing contact file and unreadable folders', async () => {
@@ -178,6 +195,37 @@ describe('generate', () => {
     });
   });
 
+  it('runs one build at a time, and changes made meanwhile never reset it', async () => {
+    const store = newStore();
+    await loadFolder(store, sampleFolder());
+    const options = store.get().folder?.library.options ?? [];
+    setPacket(store, [newPacketItem(options[0]!)]);
+    let finishBuild: (packet: Awaited<ReturnType<Services['buildPacket']>>) => void = () => {};
+    const services = {
+      ...fakeServices(),
+      buildPacket: vi.fn<Services['buildPacket']>(() => new Promise((resolve) => (finishBuild = resolve))),
+    };
+
+    const building = generate(store, services);
+    await vi.waitFor(() => expect(services.buildPacket).toHaveBeenCalledOnce());
+    setSizePreset(store, 'smaller');
+    setPacket(store, [newPacketItem(options[1]!)]);
+    await loadFolder(store, sampleFolder());
+    expect(store.get().build.status).toBe('working');
+
+    await generate(store, services);
+    expect(services.buildPacket).toHaveBeenCalledOnce();
+
+    finishBuild({ bytes: new Uint8Array(10), pageCount: 2, sectionBytes: [10], cleanupSavings: 0 });
+    await building;
+    expect(store.get().build).toMatchObject({ status: 'done', pageCount: 2 });
+    expect(services.saved).toHaveLength(1);
+
+    // Once it's finished, a change clears the result so it can't be mistaken for the new choice.
+    setSizePreset(store, 'high');
+    expect(store.get().build).toEqual({ status: 'idle' });
+  });
+
   it('collects photo problems and shows builder errors', async () => {
     const store = newStore();
     await loadFolder(store, sampleFolder());
@@ -199,7 +247,8 @@ describe('generate', () => {
     await generate(store, crashing);
     expect(store.get().build).toEqual({
       status: 'error',
-      message: 'Something went wrong while building the PDF.',
+      message:
+        'Something went wrong while building the PDF. Click “Generate PDF” to try again. If it happens again, reload the page and choose your folder again.',
       details: ['Technical detail: boom'],
     });
   });
