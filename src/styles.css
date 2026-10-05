@@ -284,6 +284,10 @@ main {
   color: var(--muted);
 }
 
+.folder-status .folder-name {
+  color: var(--ink);
+}
+
 /* Buttons */
 .button {
   border-radius: var(--radius);

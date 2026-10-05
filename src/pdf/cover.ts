@@ -132,7 +132,9 @@ export function drawCover(
     if (entry.description) {
       const room = right - pageWidth - 16 - (textEnd + 8);
       if (room > 40) {
-        const note = fitText(`· ${sanitize(entry.description)}`, regular, COVER.noteSize, room);
+        // Shortened inside the parentheses, so a long note still closes them.
+        const parentheses = regular.widthOfTextAtSize('()', COVER.noteSize);
+        const note = `(${fitText(sanitize(entry.description), regular, COVER.noteSize, room - parentheses)})`;
         page.drawText(note, { x: textEnd + 6, y: spot.y, size: COVER.noteSize, font: regular, color: INK });
         textEnd += 6 + regular.widthOfTextAtSize(note, COVER.noteSize);
       }

@@ -75,15 +75,7 @@ export function createFolderStep(store: Store<AppState>) {
     if (state.folderLoading) {
       replaceChildren(status, 'Reading folder…');
     } else if (state.folder) {
-      const count = state.folder.library.options.length;
-      const contact = state.folder.contact;
-      const people = contact.status === 'loaded' ? contact.info.applicants.length : 0;
-      replaceChildren(
-        status,
-        h('strong', null, `“${state.folder.name}”`),
-        ` · ${count} ${count === 1 ? 'item' : 'items'} to arrange`,
-        people > 0 && ` · contact info for ${people} ${people === 1 ? 'person' : 'people'}`,
-      );
+      replaceChildren(status, h('span', { class: 'folder-name' }, state.folder.name));
     } else {
       replaceChildren(status);
     }

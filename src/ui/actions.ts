@@ -108,7 +108,7 @@ export async function generate(store: Store<AppState>, services: Services): Prom
     const problems: string[] = [];
 
     for (const [index, { section, doc }] of all.entries()) {
-      working((READING_SHARE * index) / all.length, 'Reading your files…');
+      working((READING_SHARE * index) / all.length, 'Processing your files…');
       const label = `${section.title}/${doc.path}`;
       try {
         prepared.set(doc, await readDocument(doc, label, prepareImage));

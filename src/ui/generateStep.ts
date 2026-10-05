@@ -1,3 +1,4 @@
+import { formatFileSize } from '../core/fileSize';
 import { planPacket } from '../core/packet';
 import { getSizePreset, SIZE_PRESETS, type SizePresetId } from '../core/sizePresets';
 import { generate, type Services } from './actions';
@@ -6,11 +7,11 @@ import type { AppState, SizeReport } from './state';
 import type { Store } from './store';
 
 /** Many application portals and inboxes stop accepting files around here. */
-const LARGE_FILE_BYTES = 10 * 1024 * 1024;
+const LARGE_FILE_BYTES = 10_000_000;
 /** Packets at least this big get a breakdown of where the size comes from. */
-const REPORT_FROM_BYTES = 5 * 1024 * 1024;
+const REPORT_FROM_BYTES = 5_000_000;
 const SECTIONS_IN_REPORT = 4;
-const NOTABLE_SAVING_BYTES = 100 * 1024;
+const NOTABLE_SAVING_BYTES = 100_000;
 
 /** Step 4: pick a size and build the PDF. */
 export function createGenerateStep(store: Store<AppState>, services: Services) {
@@ -92,7 +93,7 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
               null,
               'Saved ',
               h('strong', null, build.fileName),
-              ` to your Downloads folder: ${build.pageCount} pages, ${formatBytes(build.byteLength)}.`,
+              ` to your Downloads folder: ${build.pageCount} pages, ${formatFileSize(build.byteLength)}.`,
             ),
             build.byteLength >= REPORT_FROM_BYTES && sizeBreakdown(build.sizeReport),
             build.byteLength > LARGE_FILE_BYTES &&
@@ -130,22 +131,17 @@ function sizeBreakdown(report: SizeReport): HTMLElement {
             null,
             `${section.title}: `,
             section.before - section.after >= NOTABLE_SAVING_BYTES
-              ? `${formatBytes(section.before)} → about ${formatBytes(section.after)}`
-              : formatBytes(section.after),
+              ? `${formatFileSize(section.before)} → about ${formatFileSize(section.after)}`
+              : formatFileSize(section.after),
           ),
         ),
     ),
     report.sharedSaved >= NOTABLE_SAVING_BYTES &&
-      h('p', null, `Repeated images and fonts are stored once, which saved ${formatBytes(report.sharedSaved)}.`),
+      h('p', null, `Repeated images and fonts are stored once, which saved ${formatFileSize(report.sharedSaved)}.`),
     h(
       'p',
       { class: 'faint' },
       'Good to know: scans made at 300 dpi, or with the iPhone Notes scanner, start out much smaller than 600 dpi scans or photos.',
     ),
   );
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
