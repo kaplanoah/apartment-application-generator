@@ -1,6 +1,6 @@
 import { daysInMonth, isValidDate, type CalendarDate } from './calendar';
 
-export type DatePrecision = 'year' | 'month' | 'day';
+type DatePrecision = 'year' | 'month' | 'day';
 
 /** The span of time a file covers, based on the date in its name. */
 export interface FileDate {

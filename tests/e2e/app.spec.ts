@@ -66,7 +66,13 @@ test.beforeAll(async ({ browser }) => {
     return canvas.toDataURL('image/jpeg', 0.9).split(',')[1] as string;
   });
   await scratch.close();
-  const big = withExifOrientation(new Uint8Array(Buffer.from(bigPhoto, 'base64')), 6);
+  const bigPlain = new Uint8Array(Buffer.from(bigPhoto, 'base64'));
+  const big = withExifOrientation(bigPlain, 6);
+  // A scanned ID saved as a PDF: a big photo inside, the usual reason a PDF is huge.
+  const scan = await PDFDocument.create();
+  const scanImage = await scan.embedJpg(bigPlain);
+  scan.addPage([612, 792]).drawImage(scanImage, { x: 36, y: 200, width: 540, height: 360 });
+  const scannedPdf = await scan.save();
   bigPhotoBytes = big.byteLength;
   photosFolder = join(workspace, 'Photos');
   await writeFiles(
@@ -75,6 +81,7 @@ test.beforeAll(async ({ browser }) => {
       ['ID/a-big-sideways.jpg', big],
       ['ID/b-small-sideways.jpg', withExifOrientation(sampleIdJpeg(), 6)],
       ['ID/c-wide.jpg', sampleIdJpeg()],
+      ['Scanned ID.pdf', scannedPdf],
     ]),
   );
 });
@@ -130,6 +137,7 @@ test('says it is local-only and ships a strict no-network policy', async ({ page
 });
 
 test('builds a packet in the chosen order with cover, contents, links and footers', async ({ page }) => {
+  test.slow(); // builds and reads back a 14-page packet
   const { outside, errors } = await openApp(page);
   await page.getByLabel('Address').fill('123 Main St, Apt 4B');
 
@@ -176,10 +184,10 @@ test('builds a packet in the chosen order with cover, contents, links and footer
   ]) {
     expect(cover).toContain(text);
   }
-  expect(cover).toMatch(/01 Cover Letter .*2/);
-  expect(cover).toMatch(/02 Pay Stubs .*last 1 .*3/);
-  expect(cover).toMatch(/03 W-2s .*last 2 .*5/);
-  expect(cover).toMatch(/04 Bank Statements .*last 2 months .*9/);
+  // No item numbers in the contents, only page numbers.
+  expect(cover).toContain(
+    'CONTENTS Cover Letter 2 Pay Stubs · last 1 3 W-2s · last 2 5 Bank Statements · last 2 months 9',
+  );
 
   expect(pdf.pages[1]).toContain('Cover Letter');
   expect(pdf.pages[2]).toContain('Pay Stub 2026-10-02'); // Alex's subfolder sorts first
@@ -203,6 +211,7 @@ test('builds a packet in the chosen order with cover, contents, links and footer
 });
 
 test('photos become upright pages, and the size choice shrinks big photos', async ({ page }) => {
+  test.slow(); // builds two packets from large photos
   await openApp(page);
   await chooseFolder(page, photosFolder);
   await addTile(page, 'ID');
@@ -226,6 +235,42 @@ test('photos become upright pages, and the size choice shrinks big photos', asyn
   }
   expect(full.bytes).toBeGreaterThan(bigPhotoBytes); // original kept byte-for-byte
   expect(smaller.bytes).toBeLessThan(full.bytes * 0.4);
+});
+
+test('big photos inside PDFs, like scans, are shrunk too while the page stays the same', async ({ page }) => {
+  test.slow(); // builds two packets from a large scan
+  await openApp(page);
+  await chooseFolder(page, photosFolder);
+  await addTile(page, 'Scanned ID');
+
+  const sizes: number[] = [];
+  for (const label of ['Full quality', 'Smaller']) {
+    await page.getByText(label, { exact: true }).click();
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Generate PDF' }).click();
+    const bytes = await readFile(await (await downloadPromise).path());
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getPages().map((p) => p.getSize())).toEqual([
+      { width: 612, height: 792 },
+      { width: 612, height: 792 },
+    ]);
+    sizes.push(bytes.byteLength);
+  }
+  expect(sizes[0]).toBeGreaterThan(bigPhotoBytes); // full quality keeps the scan as it was
+  expect(sizes[1]).toBeLessThan((sizes[0] as number) * 0.3);
+});
+
+test('explains that dropping a folder isn’t supported, without leaving the page', async ({ page }) => {
+  await openApp(page);
+  const prevented = await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.items.add(new File(['x'], 'statement.pdf', { type: 'application/pdf' }));
+    const drop = new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(drop);
+    return drop.defaultPrevented;
+  });
+  expect(prevented).toBe(true);
+  await expect(page.getByRole('alert')).toContainText('Drag and drop isn’t supported. Click “Choose folder…”');
 });
 
 test('text files become pages, and the security details link points to the repository', async ({ page }) => {

@@ -122,7 +122,7 @@ export function withExifOrientation(jpeg: Uint8Array, orientation: number, littl
   );
 }
 
-export const SAMPLE_CONTACT_INFO = `# Sample contact info. Replace with your own.
+const SAMPLE_CONTACT_INFO = `# Sample contact info. Replace with your own.
 Name: Alex Sample
 Email: alex@example.com
 Phone: (555) 010-2481
@@ -132,7 +132,7 @@ Email: jordan@example.com
 Phone: (555) 010-7730
 `;
 
-export const SAMPLE_NOTE = `Hello,
+const SAMPLE_NOTE = `Hello,
 
 Thank you for considering our application. We are both non-smokers, we have one small dog (Biscuit, vaccination record attached), and we are flexible on the move-in date.
 

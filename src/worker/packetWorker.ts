@@ -3,14 +3,32 @@
 import './sealOnLoad';
 import { UserFacingError } from '../core/errors';
 import { buildPacket } from '../pdf/buildPacket';
+import type { JpegShrinker, ShrunkImage } from '../pdf/shrinkImages';
 import type { WorkerRequest, WorkerResponse } from './protocol';
 import { exposedGlobals } from './seal';
 
 const scope = globalThis as unknown as DedicatedWorkerGlobalScope;
 const reply = (message: WorkerResponse, transfer: Transferable[] = []) => scope.postMessage(message, transfer);
 
+const pendingShrinks = new Map<number, (image: ShrunkImage | null) => void>();
+let nextShrinkId = 1;
+
+/** Has the page re-encode an image; the answer arrives as a 'shrunk-image' message. */
+const askPageToShrink: JpegShrinker = (jpeg, maxEdge, quality) =>
+  new Promise((resolve) => {
+    const id = nextShrinkId++;
+    pendingShrinks.set(id, resolve);
+    const copy = jpeg.slice(); // the original stays in the PDF until replaced
+    reply({ type: 'shrink-image', id, jpeg: copy, maxEdge, quality }, [copy.buffer as ArrayBuffer]);
+  });
+
 scope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
+  if (request.type === 'shrunk-image') {
+    pendingShrinks.get(request.id)?.(request.image);
+    pendingShrinks.delete(request.id);
+    return;
+  }
   if (request.type === 'check-seal') {
     reply({ type: 'seal-report', exposed: exposedGlobals(globalThis) });
     return;
@@ -18,9 +36,10 @@ scope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   if (request.type !== 'build') return;
 
   try {
-    const packet = await buildPacket(request.cover, request.sections, (done, total) =>
-      reply({ type: 'progress', done, total }),
-    );
+    const packet = await buildPacket(request.cover, request.sections, {
+      onProgress: (done, total) => reply({ type: 'progress', done, total }),
+      imageLimits: request.imageLimits ? { ...request.imageLimits, shrink: askPageToShrink } : undefined,
+    });
     reply({ type: 'done', bytes: packet.bytes, pageCount: packet.pageCount }, [packet.bytes.buffer as ArrayBuffer]);
   } catch (error) {
     const expected = error instanceof UserFacingError;

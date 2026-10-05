@@ -19,7 +19,7 @@ export interface LibraryDocument<F> {
   readonly file: F;
 }
 
-export type SkipReason = 'different-level' | 'unsupported-type' | 'needs-pdf';
+type SkipReason = 'different-level' | 'unsupported-type' | 'needs-pdf';
 
 export interface SkippedFile {
   readonly path: string;
@@ -39,7 +39,7 @@ export interface FolderOption<F> {
   readonly hasSubfolders: boolean;
 }
 
-export interface FileOption<F> {
+interface FileOption<F> {
   readonly kind: 'file';
   readonly id: string;
   readonly title: string;
@@ -48,7 +48,7 @@ export interface FileOption<F> {
 
 export type LibraryOption<F> = FolderOption<F> | FileOption<F>;
 
-export interface IgnoredItem {
+interface IgnoredItem {
   readonly path: string;
   readonly reason: 'unsupported-type' | 'no-usable-files' | 'needs-pdf';
   /** For 'needs-pdf': how to save the file as a PDF. */
@@ -64,7 +64,7 @@ export interface Library<F> {
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-export const compareNames = (a: string, b: string): number => collator.compare(a, b);
+const compareNames = (a: string, b: string): number => collator.compare(a, b);
 
 /**
  * Turns the files of the chosen folder into packet options:
@@ -181,7 +181,7 @@ function toDocument<F>(path: readonly string[], file: F): LibraryDocument<F> {
 }
 
 /** Grouped by subfolder, newest first, undated last, then by name. */
-export function compareDocuments<F>(a: LibraryDocument<F>, b: LibraryDocument<F>): number {
+function compareDocuments<F>(a: LibraryDocument<F>, b: LibraryDocument<F>): number {
   const bySubfolder = compareNames(a.subfolder, b.subfolder);
   if (bySubfolder !== 0) return bySubfolder;
   if (a.date && b.date) {

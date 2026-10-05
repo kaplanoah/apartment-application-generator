@@ -46,7 +46,7 @@ describe('text documents in a packet', () => {
     const pdf = await readPdf(packet.bytes);
     expect(pdf.pages.length).toBeGreaterThan(2);
     expect(pdf.pages[1]).toMatch(/^Paragraph 1\. Paragraph 2\./);
-    expect(pdf.pages[0]).toMatch(/01 Note .*2/);
+    expect(pdf.pages[0]).toMatch(/CONTENTS Note 2/);
   });
 
   it('draws characters the font lacks as close equivalents', async () => {

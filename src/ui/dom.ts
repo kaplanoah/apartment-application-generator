@@ -31,7 +31,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   return element;
 }
 
-export function append(parent: Node, ...children: Child[]): void {
+function append(parent: Node, ...children: Child[]): void {
   for (const child of children) {
     if (child === null || child === undefined || child === false) continue;
     parent.appendChild(typeof child === 'object' ? child : document.createTextNode(String(child)));

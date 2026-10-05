@@ -24,11 +24,7 @@ export function findOption<F>(library: Library<F>, optionId: string): LibraryOpt
   return library.options.find((option) => option.id === optionId);
 }
 
-export function documentsFor<F>(
-  option: LibraryOption<F>,
-  range: Range,
-  today: CalendarDate,
-): readonly LibraryDocument<F>[] {
+function documentsFor<F>(option: LibraryOption<F>, range: Range, today: CalendarDate): readonly LibraryDocument<F>[] {
   return option.kind === 'file' ? [option.document] : selectDocuments(option, range, today).included;
 }
 

@@ -15,8 +15,9 @@ connects to the internet, and your documents are never transferred or stored. Se
 1. **Apartment.** Type the apartment's address. The footer on every page is made from
    your names and the address, like
    `Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B only · Oct 2026`.
-2. **Documents folder.** Drag in the folder that holds all your documents, or click
-   **Choose folder…** (the more reliable option in Safari).
+2. **Documents folder.** Click **Choose folder…** and pick the folder that holds all your
+   documents. (Drag and drop isn't supported: browsers don't read large, nested folders
+   reliably that way.)
 3. **Order.** Every top-level folder and file in it appears as a tile. Drag the ones this
    apartment wants into the list, in order, and drag a card back up to remove it. For
    folders with dated files, choose **Last 2 months** or **Last 2 documents**, for example.
@@ -117,17 +118,19 @@ files dated only by year (W-2s, tax returns).
 
 ## File size
 
-PDFs are always copied exactly, so their text stays sharp. Only photos are resized,
-based on how large they print on a letter page:
+Text is never changed, so it stays sharp. Only photos and scanned images are resized,
+including the ones inside PDFs (a scanned ID saved as a PDF is usually one big photo).
+Sizes are based on how large an image prints on a letter page:
 
-| Choice                 | Photos              | Good for                           |
+| Choice                 | Photos and scans    | Good for                           |
 | ---------------------- | ------------------- | ---------------------------------- |
 | Smaller                | about 110 dpi       | email and upload limits            |
 | **Balanced** (default) | about 150 dpi       | almost everything. IDs stay crisp. |
 | Full quality           | original resolution | when every pixel matters           |
 
-If a packet is still big, it's usually a scanned PDF. In Preview, choose File → Export,
-then Quartz Filter → Reduce File Size, and use the smaller copy.
+An image is only re-encoded when it's bigger than the limit, and only if the result is
+actually smaller, so nothing is compressed twice. Images the app can't safely change (CMYK,
+masked or unusual formats) are kept exactly as they are.
 
 ## Troubleshooting
 
@@ -152,7 +155,8 @@ npm run dev           # live-reloading dev server
 npm run build         # → dist/index.html, the single self-contained file
 npm test              # unit tests (Vitest)
 npm run test:e2e      # build, then end-to-end tests in a real browser (Playwright)
-npm run check         # everything CI runs: format, lint, types, unit and e2e tests
+npm run deadcode      # unused files, exports and dependencies (knip)
+npm run check         # everything CI runs: format, lint, types, dead code, unit and e2e tests
 npm run example       # regenerate the fake example folder
 ```
 
@@ -181,14 +185,16 @@ chosen files and prepares photos, then hands the bytes to a fresh sealed worker
 The "Details" link next to the local-only notice points to the security page of the
 repository named in `package.json` (`repository.url`). Update it if you fork the project.
 
-### Ground rules for contributions
+### Contributing
 
-- Never add network access, analytics or browser storage. The lint rules and tests will
-  stop you, on purpose.
-- Keep `src/core` free of browser APIs so it stays easy to test.
-- Insert text with `h()` from `src/ui/dom.ts`; never build HTML from strings.
-- Write messages for people: say what went wrong and how to fix it.
-- Run `npm run check` before opening a pull request.
+The rules for changes, including the privacy guarantees, are in [AGENTS.md](AGENTS.md).
+Every change goes through a pull request. CI runs lint, formatting, types, dead-code
+detection, unit tests in three time zones, and browser tests in Chromium and WebKit side by
+side; the single `check` job passes only when all of them do, so require it before merging.
+
+Pull requests are also reviewed by Claude for bugs, privacy and security issues, and rule
+violations. To turn that on in your copy, add a `CLAUDE_CODE_OAUTH_TOKEN` (or
+`ANTHROPIC_API_KEY`) repository secret; without one, the review step is skipped.
 
 ## License
 

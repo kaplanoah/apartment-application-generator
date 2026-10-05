@@ -10,7 +10,7 @@ export type ContactState =
   | { readonly status: 'unreadable'; readonly reason: string }
   | { readonly status: 'loaded'; readonly info: ContactInfo };
 
-export interface LoadedFolder {
+interface LoadedFolder {
   readonly name: string;
   readonly library: Library<File>;
   readonly contact: ContactState;
@@ -21,16 +21,11 @@ export interface Notice {
   readonly details: readonly string[];
 }
 
-export type BuildStatus =
+type BuildStatus =
   | { readonly status: 'idle' }
-  | { readonly status: 'working'; readonly step: string }
-  | {
-      readonly status: 'done';
-      readonly fileName: string;
-      readonly pageCount: number;
-      readonly byteLength: number;
-      readonly largestInputs: readonly { readonly path: string; readonly byteLength: number }[];
-    }
+  /** `progress` runs from 0 to 1 across reading the files and building the PDF. */
+  | { readonly status: 'working'; readonly progress: number; readonly label: string }
+  | { readonly status: 'done'; readonly fileName: string; readonly pageCount: number; readonly byteLength: number }
   | ({ readonly status: 'error' } & Notice);
 
 export interface AppState {

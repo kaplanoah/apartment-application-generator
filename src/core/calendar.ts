@@ -46,11 +46,11 @@ export function addMonths(date: CalendarDate, months: number): CalendarDate {
   return { year, month, day: Math.min(date.day, daysInMonth(year, month)) };
 }
 
-export function startOfMonth(date: CalendarDate): CalendarDate {
+function startOfMonth(date: CalendarDate): CalendarDate {
   return { year: date.year, month: date.month, day: 1 };
 }
 
-export function endOfMonth(date: CalendarDate): CalendarDate {
+function endOfMonth(date: CalendarDate): CalendarDate {
   return { year: date.year, month: date.month, day: daysInMonth(date.year, date.month) };
 }
 

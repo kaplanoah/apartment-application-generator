@@ -1,7 +1,8 @@
 import { UserFacingError } from '../core/errors';
 import { extensionOf } from '../core/fileTypes';
 import type { SizePreset } from '../core/sizePresets';
-import { tryUseAsIs, type ImagePreparer, type PreparedImage } from '../pdf/images';
+import { sniffImageFormat, tryUseAsIs, type ImagePreparer } from '../pdf/images';
+import type { JpegShrinker } from '../pdf/shrinkImages';
 
 const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   jpg: 'image/jpeg',
@@ -27,7 +28,7 @@ export function createImagePreparer(preset: SizePreset): ImagePreparer {
       const longEdge = Math.max(image.naturalWidth, image.naturalHeight);
       const limit = preset.maxImageEdge ?? longEdge;
       if (asIs && longEdge <= limit) return asIs;
-      return await redraw(
+      const redrawn = await redraw(
         image.element,
         image.naturalWidth,
         image.naturalHeight,
@@ -36,11 +37,38 @@ export function createImagePreparer(preset: SizePreset): ImagePreparer {
         preset.jpegQuality,
         fileName,
       );
+      return { bytes: redrawn.bytes, format: redrawn.format, turn: 0 };
     } finally {
       image.release();
     }
   };
 }
+
+/**
+ * Re-encodes an oversized JPEG found inside a PDF, for the sealed worker. Returns null to keep
+ * the original: when it can't be decoded, is already small enough, or isn't smaller as a JPEG.
+ */
+export const shrinkJpeg: JpegShrinker = async (jpeg, maxEdge, quality) => {
+  const image = await decode(jpeg, 'image.jpg').catch(() => null);
+  if (!image) return null;
+  try {
+    const longEdge = Math.max(image.naturalWidth, image.naturalHeight);
+    if (longEdge <= maxEdge) return null;
+    const scale = maxEdge / longEdge;
+    const redrawn = await redraw(
+      image.element,
+      image.naturalWidth,
+      image.naturalHeight,
+      scale,
+      'jpg',
+      quality,
+      'image',
+    );
+    return sniffImageFormat(redrawn.bytes) === 'jpg' ? redrawn : null;
+  } finally {
+    image.release();
+  }
+};
 
 interface DecodedImage {
   readonly element: HTMLImageElement;
@@ -82,7 +110,7 @@ async function redraw(
   format: 'jpg' | 'png',
   quality: number,
   fileName: string,
-): Promise<PreparedImage> {
+): Promise<{ bytes: Uint8Array; format: 'jpg' | 'png'; width: number; height: number }> {
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(width * scale));
   canvas.height = Math.max(1, Math.round(height * scale));
@@ -98,7 +126,8 @@ async function redraw(
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, format === 'jpg' ? 'image/jpeg' : 'image/png', quality),
   );
+  const { width: outWidth, height: outHeight } = canvas;
   canvas.width = canvas.height = 0; // free the pixels right away
   if (!blob) throw new UserFacingError(`${fileName}: the photo couldn’t be resized.`);
-  return { bytes: new Uint8Array(await blob.arrayBuffer()), format, turn: 0 };
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), format, width: outWidth, height: outHeight };
 }
