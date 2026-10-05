@@ -55,6 +55,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      playwright: ${{ steps.playwright.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -63,17 +65,26 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Find the Playwright version the browser tests need
+        id: playwright
+        run: echo "version=$(jq -r '.packages["node_modules/@playwright/test"].version' package-lock.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: apartment-packet-builder
           path: dist/index.html
           if-no-files-found: error
 
-  # The browser tests take most of CI's time, so each engine runs on its own machine.
+  # The browser tests take most of CI's time, so each engine runs on its own machine, in
+  # Playwright's image for the locked @playwright/test version: the browsers and the system
+  # libraries they need are already in it.
   browser:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.build.outputs.playwright }}-noble
+      # Chromium needs more shared memory than a container gets by default.
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -89,7 +100,6 @@ jobs:
         with:
           name: apartment-packet-builder
           path: dist
-      - run: npx playwright install --with-deps ${{ matrix.project == 'chromium' && '--only-shell chromium' || 'webkit' }}
       - run: npx playwright test --project=${{ matrix.project }}
       # The page as each failed test last saw it, so a failure can be understood from the log.
       - name: Show the page at each failure
