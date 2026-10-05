@@ -69,11 +69,14 @@ jobs:
           path: dist/index.html
           if-no-files-found: error
 
-  # The browser tests take most of CI's time, so each engine runs on its own machine.
+  # The browser tests take most of CI's time, so each engine runs on its own machine. They
+  # start alongside the build job and pick up its file once their browser is installed.
   browser:
-    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -85,11 +88,20 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: apartment-packet-builder
-          path: dist
       - run: npx playwright install --with-deps ${{ matrix.project == 'chromium' && '--only-shell chromium' || 'webkit' }}
+      # The exact file a release would publish, usually uploaded by the time the browser is in.
+      - name: Get the built file
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          for attempt in $(seq 90); do
+            gh run download "$RUN_ID" --name apartment-packet-builder --dir dist 2> /dev/null && exit 0
+            sleep 2
+          done
+          echo "::error::The build job's file didn't arrive within 3 minutes. Check the build job."
+          exit 1
       - run: npx playwright test --project=${{ matrix.project }}
       # The page as each failed test last saw it, so a failure can be understood from the log.
       - name: Show the page at each failure
