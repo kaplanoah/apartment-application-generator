@@ -201,7 +201,7 @@ jobs:
           echo "Releasing $version."
           mkdir "Apartment Packet Builder"
           cp apartment-packet-builder.html "Apartment Packet Builder/"
-          cp -R "example/Apartment Docs" "Apartment Packet Builder/Example Apartment Docs"
+          cp -R "example/Apartment Docs" "Apartment Packet Builder/Apartment Docs"
           zip -qrX apartment-packet-builder.zip "Apartment Packet Builder"
           sha256sum apartment-packet-builder.html apartment-packet-builder.zip > SHA256SUMS
           gh release create "$version" apartment-packet-builder.html apartment-packet-builder.zip SHA256SUMS \
