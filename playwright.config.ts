@@ -27,6 +27,16 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: LAPTOP } },
-    ...(withWebKit ? [{ name: 'webkit', use: { ...devices['Desktop Safari'], viewport: LAPTOP } }] : []),
+    ...(withWebKit
+      ? [
+          {
+            name: 'webkit',
+            use: { ...devices['Desktop Safari'], viewport: LAPTOP },
+            // On CI machines, one WebKit building a large packet can stall another
+            // running beside it until a small test times out; one at a time is reliable.
+            workers: 1,
+          },
+        ]
+      : []),
   ],
 });
