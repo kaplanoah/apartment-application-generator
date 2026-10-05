@@ -1,4 +1,7 @@
-import type { PDFFont } from 'pdf-lib';
+import { rgb, type PDFFont } from 'pdf-lib';
+
+/** The color of all body text in the packet. */
+export const INK = rgb(0.11, 0.13, 0.19);
 
 /** Letters that don't decompose into a base letter plus accent. */
 const LETTER_FALLBACKS: Readonly<Record<string, string>> = {
@@ -24,7 +27,7 @@ export function makeTextSanitizer(font: PDFFont): (text: string) => string {
     Array.from(text.normalize('NFC').replace(/[\r\n\t]+/g, ' '), (char) => {
       const code = char.codePointAt(0) ?? 0;
       if (supported.has(code)) return char;
-      const fallback = LETTER_FALLBACKS[char] ?? char.normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const fallback = LETTER_FALLBACKS[char] ?? char.normalize('NFD').replace(/\p{M}/gu, '');
       return fallback.length === 1 && supported.has(fallback.codePointAt(0) ?? 0) ? fallback : '?';
     }).join('');
 }

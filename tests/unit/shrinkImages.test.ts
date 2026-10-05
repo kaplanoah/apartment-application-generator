@@ -5,6 +5,7 @@ import { buildPacket } from '../../src/pdf/buildPacket';
 import { readJpegOrientation } from '../../src/pdf/exif';
 import { shrinkPdfImages, type ImageShrinker, type ImageSource } from '../../src/pdf/shrinkImages';
 import { sampleIdJpeg, samplePng, withExifOrientation } from '../../scripts/lib/sampleDocs';
+import { withJpegSize } from '../support/jpeg';
 
 /** A PDF with one page showing the given JPEG (the sample ID is 1000×630). */
 async function pdfWithJpeg(jpeg: Uint8Array): Promise<Uint8Array> {
@@ -261,6 +262,59 @@ describe('shrinkPdfImages', () => {
     const doc = await PDFDocument.create();
     addLosslessImage(doc, 800, 600, { data: noise(800 * 300 * 3) });
     expect((await shrinkRecording(doc, 400)).sources).toHaveLength(0);
+  });
+
+  it('keeps an image whose data unpacks to more than its stated size', async () => {
+    const doc = await PDFDocument.create();
+    const ref = addLosslessImage(doc, 800, 600, { data: new Uint8Array(800 * 600 * 3 * 4) });
+    expect((await shrinkRecording(doc, 400)).sources).toHaveLength(0);
+    expect(streamAt(doc, ref).dict.get(PDFName.of('Filter'))).toBe(PDFName.of('FlateDecode'));
+  });
+
+  it('keeps a Flate-compressed JPEG that unpacks to more than its raw pixels would take', async () => {
+    const doc = await PDFDocument.create();
+    const padded = new Uint8Array(1000 * 630 * 3 + 1);
+    padded.set(sampleIdJpeg());
+    doc.context.register(
+      PDFRawStream.of(
+        doc.context.obj({
+          Subtype: 'Image',
+          Width: 1000,
+          Height: 630,
+          BitsPerComponent: 8,
+          ColorSpace: 'DeviceRGB',
+          Filter: ['FlateDecode', 'DCTDecode'],
+        }),
+        deflateSync(padded),
+      ),
+    );
+    expect((await shrinkRecording(doc, 500)).sources).toHaveLength(0);
+  });
+
+  it('keeps a JPEG whose real size differs from what its dictionary says', async () => {
+    for (const jpeg of [withJpegSize(sampleIdJpeg(), 1000, 631), withJpegSize(sampleIdJpeg(), 60_000, 60_000)]) {
+      const doc = await PDFDocument.load(await pdfWithJpeg(sampleIdJpeg()));
+      const stream = imageStreams(doc)[0]!;
+      const ref = doc.context.getObjectRef(stream)!;
+      doc.context.assign(ref, PDFRawStream.of(stream.dict, jpeg));
+      expect((await shrinkRecording(doc, 500)).sources).toHaveLength(0);
+    }
+  });
+
+  it('keeps soft masks, which hold another image’s transparency, as they are', async () => {
+    const doc = await PDFDocument.create();
+    const mask = addLosslessImage(doc, 800, 600, { channels: 1, extra: { ColorSpace: 'DeviceGray' } });
+    const photo = addLosslessImage(doc, 800, 600, { extra: { SMask: mask } });
+    const { sources } = await shrinkRecording(doc, 400);
+
+    expect(sources).toHaveLength(1);
+    expect((sources[0] as Extract<ImageSource, { kind: 'pixels' }>).channels).toBe(3);
+    expect(width(streamAt(doc, photo))).toBe(400);
+    expect(streamAt(doc, photo).dict.get(PDFName.of('SMask'))).toBe(mask);
+    const kept = streamAt(doc, mask);
+    expect(width(kept)).toBe(800);
+    expect(kept.dict.get(PDFName.of('ColorSpace'))).toBe(PDFName.of('DeviceGray'));
+    expect(kept.dict.get(PDFName.of('Filter'))).toBe(PDFName.of('FlateDecode'));
   });
 
   it('is applied to PDFs in a packet when limits are given', async () => {

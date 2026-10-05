@@ -25,7 +25,7 @@ export function normalizeQuarterTurn(degrees: number): QuarterTurn {
 }
 
 /** Size of the page as the reader sees it, after the page's /Rotate. */
-export function visibleSize(box: Box, rotation: QuarterTurn): { width: number; height: number } {
+export function measureVisibleSize(box: Box, rotation: QuarterTurn): { width: number; height: number } {
   return rotation === 90 || rotation === 270
     ? { width: box.height, height: box.width }
     : { width: box.width, height: box.height };
@@ -36,16 +36,16 @@ export function visibleSize(box: Box, rotation: QuarterTurn): { width: number; h
  * into the page's own coordinates, plus the text rotation needed to read
  * upright. PDF viewers rotate pages clockwise by /Rotate.
  */
-export function visibleToPage(box: Box, rotation: QuarterTurn, vx: number, vy: number): Placement {
+export function mapVisiblePointToPage(box: Box, rotation: QuarterTurn, visibleX: number, visibleY: number): Placement {
   switch (rotation) {
     case 0:
-      return { x: box.x + vx, y: box.y + vy, rotate: 0 };
+      return { x: box.x + visibleX, y: box.y + visibleY, rotate: 0 };
     case 90:
-      return { x: box.x + box.width - vy, y: box.y + vx, rotate: 90 };
+      return { x: box.x + box.width - visibleY, y: box.y + visibleX, rotate: 90 };
     case 180:
-      return { x: box.x + box.width - vx, y: box.y + box.height - vy, rotate: 180 };
+      return { x: box.x + box.width - visibleX, y: box.y + box.height - visibleY, rotate: 180 };
     case 270:
-      return { x: box.x + vy, y: box.y + box.height - vx, rotate: 270 };
+      return { x: box.x + visibleY, y: box.y + box.height - visibleX, rotate: 270 };
   }
 }
 
@@ -84,7 +84,7 @@ export function fitImage(imageWidth: number, imageHeight: number, turn: QuarterT
 }
 
 /** Letter page in the orientation that suits the image best. */
-export function pageSizeForImage(
+export function choosePageSizeForImage(
   imageWidth: number,
   imageHeight: number,
   turn: QuarterTurn,

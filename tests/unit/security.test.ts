@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { buildPolicy, CSP_PLACEHOLDER, inlineSingleFile } from '../../build/inlineSingleFile';
 import { BLOCKED_GLOBALS, exposedGlobals, sealScope } from '../../src/worker/seal';
 import { isWorkerResponse } from '../../src/worker/protocol';
+import { sampleIdJpeg } from '../../scripts/lib/sampleDocs';
+import { withJpegSize } from '../support/jpeg';
 
 describe('worker seal', () => {
   /** Mimics a worker global: APIs live on the prototype, constructors on the object. */
@@ -80,8 +82,10 @@ describe('worker messages', () => {
     expect(isWorkerResponse({ type: 'error', message: 'x', details: [], expected: true })).toBe(true);
     const shrink = (source: unknown, id = 1) =>
       isWorkerResponse({ type: 'shrink-image', id, source, maxEdge: 1600, quality: 0.8 });
-    expect(shrink({ kind: 'jpeg', bytes: new Uint8Array() })).toBe(true);
-    expect(shrink({ kind: 'jpeg', bytes: new Uint8Array() }, 1.5)).toBe(false);
+    expect(shrink({ kind: 'jpeg', bytes: sampleIdJpeg() })).toBe(true);
+    expect(shrink({ kind: 'jpeg', bytes: sampleIdJpeg() }, 1.5)).toBe(false);
+    expect(shrink({ kind: 'jpeg', bytes: new Uint8Array() })).toBe(false); // no size to check
+    expect(shrink({ kind: 'jpeg', bytes: withJpegSize(sampleIdJpeg(), 60_000, 60_000) })).toBe(false); // too big to draw
     expect(shrink({ kind: 'jpeg', bytes: 'x' })).toBe(false);
     const pixels = { kind: 'pixels', bytes: new Uint8Array(2 * 3 * 3), width: 2, height: 3, channels: 3 };
     expect(shrink(pixels)).toBe(true);

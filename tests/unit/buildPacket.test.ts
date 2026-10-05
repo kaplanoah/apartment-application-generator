@@ -1,4 +1,4 @@
-import { PDFDocument } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFName, StandardFonts } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { UserFacingError } from '../../src/core/errors';
 import { buildPacket, type PacketDocument } from '../../src/pdf/buildPacket';
@@ -184,4 +184,114 @@ describe('buildPacket', () => {
       'Bank/photo.jpg: the photo wasn’t prepared.',
     ]);
   });
+
+  it('rejects PDFs with a broken page tree up front, listing each one', async () => {
+    const attempt = buildPacket(cover, [
+      {
+        title: 'Broken',
+        description: null,
+        documents: [
+          { label: 'no-pages.pdf', kind: 'pdf', bytes: handWrittenPdf(['<< /Type /Catalog >>']) },
+          { label: 'kids.pdf', kind: 'pdf', bytes: handWrittenPdf([CATALOG, '<< /Type /Pages /Kids 5 /Count 1 >>']) },
+          {
+            label: 'loop.pdf',
+            kind: 'pdf',
+            bytes: handWrittenPdf([
+              CATALOG,
+              '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+              '<< /Type /Pages /Kids [2 0 R] /Count 1 >>',
+            ]),
+          },
+          {
+            label: 'no-size.pdf',
+            kind: 'pdf',
+            bytes: handWrittenPdf([
+              CATALOG,
+              '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+              '<< /Type /Page /Parent 2 0 R >>',
+            ]),
+          },
+          { label: 'fine.pdf', kind: 'pdf', bytes: await samplePdf('fine', []) },
+        ],
+      },
+    ]);
+    const error = (await attempt.catch((e: unknown) => e)) as UserFacingError;
+    expect(error).toBeInstanceOf(UserFacingError);
+    expect(error.message).toBe('4 files couldn’t be added.');
+    const unreadable = 'it couldn’t be read as a PDF. Try opening it in Preview and exporting it again.';
+    expect(error.details).toEqual(
+      ['no-pages.pdf', 'kids.pdf', 'loop.pdf', 'no-size.pdf'].map((label) => `${label}: ${unreadable}`),
+    );
+  });
+
+  it('names a file that fails while it’s being added, with how to fix it', async () => {
+    const garbled = { label: 'ID/photo.jpg', kind: 'image' as const, bytes: new Uint8Array([1, 2, 3]) };
+    const attempt = buildPacket(cover, [
+      { title: 'ID', description: null, documents: [{ ...garbled, image: { format: 'jpg', turn: 0 } }] },
+    ]);
+    const error = (await attempt.catch((e: unknown) => e)) as UserFacingError;
+    expect(error).toBeInstanceOf(UserFacingError);
+    expect(error.message).toBe('One file couldn’t be added.');
+    expect(error.details).toEqual([
+      'ID/photo.jpg: the photo couldn’t be read. Try opening it in Preview and exporting it again as a JPEG.',
+    ]);
+  });
+
+  it('keeps contents links and bookmarks on the right section after an empty one', async () => {
+    const packet = await buildPacket(cover, [
+      { title: 'First', description: null, documents: [await pdfDoc('first')] },
+      { title: 'Empty', description: null, documents: [] },
+      { title: 'Last', description: null, documents: [await pdfDoc('last')] },
+    ]);
+    const pdf = await readPdf(packet.bytes);
+    expect(pdf.pages[2]).toContain('last');
+    expect(pdf.links[0]).toEqual([1, 2]);
+    expect(pdf.outline).toEqual(['First', 'Last']);
+  });
+
+  it('keeps links between pages of a source PDF working, without stray page copies', async () => {
+    const source = await PDFDocument.create();
+    const font = await source.embedFont(StandardFonts.Helvetica);
+    const pages = [1, 2, 3].map((n) => {
+      const page = source.addPage([612, 792]);
+      page.drawText(`Lease page ${n}`, { x: 72, y: 700, font });
+      return page;
+    });
+    const [first, second, third] = pages as [(typeof pages)[0], (typeof pages)[0], (typeof pages)[0]];
+    const outside = source.context.register(source.context.obj({ Type: 'Page', MediaBox: [0, 0, 612, 792] }));
+    const link = (page: typeof first, target: Record<string, unknown>) =>
+      page.node.addAnnot(
+        source.context.register(
+          source.context.obj({ Type: 'Annot', Subtype: 'Link', Rect: [72, 72, 200, 100], P: page.ref, ...target }),
+        ),
+      );
+    link(first, { Dest: [third.ref, 'Fit'] });
+    link(second, { A: { S: 'GoTo', D: [first.ref, 'Fit'] } });
+    link(third, { Dest: [outside, 'Fit'] });
+
+    const packet = await buildPacket(cover, [
+      {
+        title: 'Lease',
+        description: null,
+        documents: [{ label: 'lease.pdf', kind: 'pdf', bytes: await source.save() }],
+      },
+    ]);
+    const pdf = await readPdf(packet.bytes);
+    expect(pdf.pages[1]).toContain('Lease page 1');
+    expect(pdf.links.slice(1)).toEqual([[3], [1], []]);
+
+    const out = await PDFDocument.load(packet.bytes);
+    const pageObjects = out.context
+      .enumerateIndirectObjects()
+      .filter(([, object]) => object instanceof PDFDict && object.get(PDFName.of('Type')) === PDFName.of('Page'));
+    expect(pageObjects).toHaveLength(packet.pageCount);
+  });
 });
+
+const CATALOG = '<< /Type /Catalog /Pages 2 0 R >>';
+
+/** A PDF written by hand, object 1 first, to make the kinds of damage pdf-lib can't produce. */
+function handWrittenPdf(objects: readonly string[]): Uint8Array {
+  const body = objects.map((object, i) => `${i + 1} 0 obj\n${object}\nendobj\n`).join('');
+  return new TextEncoder().encode(`%PDF-1.7\n${body}trailer\n<< /Root 1 0 R >>\n%%EOF\n`);
+}

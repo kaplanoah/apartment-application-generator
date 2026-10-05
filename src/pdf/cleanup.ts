@@ -1,4 +1,5 @@
 import { PDFArray, PDFDict, PDFName, PDFRawStream, PDFRef, PDFStream, type PDFDocument, type PDFObject } from 'pdf-lib';
+import { walkReferences } from './objectGraph';
 
 /**
  * Lossless clean-up of the assembled packet, so nothing looks any different:
@@ -61,13 +62,13 @@ function mergeDuplicates(doc: PDFDocument): number {
   let saved = 0;
   for (let pass = 0; pass < MAX_MERGE_PASSES; pass++) {
     const canonical = new Map<string, PDFRef>();
-    const replacements = new Map<string, PDFRef>();
+    const replacements = new Map<PDFRef, PDFRef>();
     for (const [ref, object] of doc.context.enumerateIndirectObjects()) {
-      const key = mergeKey(object);
+      const key = makeMergeKey(object);
       if (!key) continue;
       const first = canonical.get(key);
       if (first && isSameContent(doc.context.lookup(first), object)) {
-        replacements.set(ref.tag, first);
+        replacements.set(ref, first);
         saved += object instanceof PDFRawStream ? object.contents.byteLength : 0;
       } else if (!first) {
         canonical.set(key, ref);
@@ -75,12 +76,12 @@ function mergeDuplicates(doc: PDFDocument): number {
     }
     if (replacements.size === 0) break;
     for (const [, object] of doc.context.enumerateIndirectObjects()) replaceReferences(object, replacements);
-    for (const tag of replacements.keys()) doc.context.delete(refFromTag(tag));
+    for (const ref of replacements.keys()) doc.context.delete(ref);
   }
   return saved;
 }
 
-function mergeKey(object: PDFObject): string | null {
+function makeMergeKey(object: PDFObject): string | null {
   if (object instanceof PDFRawStream) {
     return `stream:${object.contents.byteLength}:${hashBytes(object.contents)}:${object.dict.toString()}`;
   }
@@ -93,24 +94,24 @@ function mergeKey(object: PDFObject): string | null {
 
 function isSameContent(a: PDFObject | undefined, b: PDFObject): boolean {
   if (a instanceof PDFRawStream && b instanceof PDFRawStream) {
-    return a.dict.toString() === b.dict.toString() && bytesEqual(a.contents, b.contents);
+    return a.dict.toString() === b.dict.toString() && areBytesEqual(a.contents, b.contents);
   }
   return a !== undefined && a.toString() === b.toString();
 }
 
-function replaceReferences(object: PDFObject, replacements: ReadonlyMap<string, PDFRef>): void {
+function replaceReferences(object: PDFObject, replacements: ReadonlyMap<PDFRef, PDFRef>): void {
   if (object instanceof PDFStream) {
     replaceReferences(object.dict, replacements);
   } else if (object instanceof PDFDict) {
     for (const [key, value] of object.entries()) {
-      const replacement = value instanceof PDFRef ? replacements.get(value.tag) : undefined;
+      const replacement = value instanceof PDFRef ? replacements.get(value) : undefined;
       if (replacement) object.set(key, replacement);
       else replaceReferences(value, replacements);
     }
   } else if (object instanceof PDFArray) {
     for (let i = 0; i < object.size(); i++) {
       const value = object.get(i);
-      const replacement = value instanceof PDFRef ? replacements.get(value.tag) : undefined;
+      const replacement = value instanceof PDFRef ? replacements.get(value) : undefined;
       if (replacement) object.set(i, replacement);
       else replaceReferences(value, replacements);
     }
@@ -119,38 +120,23 @@ function replaceReferences(object: PDFObject, replacements: ReadonlyMap<string, 
 
 /** Deletes objects nothing points to any more, starting from the document's catalog and info. */
 function removeUnreachable(doc: PDFDocument): number {
-  const reachable = new Set<string>();
-  const pending: PDFObject[] = [doc.context.trailerInfo.Root, doc.context.trailerInfo.Info].filter(
+  const reachable = new Set<PDFRef>();
+  const roots = [doc.context.trailerInfo.Root, doc.context.trailerInfo.Info].filter(
     (object): object is PDFObject => object !== undefined,
   );
-  while (pending.length > 0) {
-    const object = pending.pop() as PDFObject;
-    if (object instanceof PDFRef) {
-      if (reachable.has(object.tag)) continue;
-      reachable.add(object.tag);
-      const target = doc.context.lookup(object);
-      if (target) pending.push(target);
-    } else if (object instanceof PDFStream) {
-      pending.push(object.dict);
-    } else if (object instanceof PDFDict) {
-      for (const [, value] of object.entries()) pending.push(value);
-    } else if (object instanceof PDFArray) {
-      for (let i = 0; i < object.size(); i++) pending.push(object.get(i));
-    }
-  }
+  walkReferences(doc.context, roots, (ref) => {
+    if (reachable.has(ref)) return false;
+    reachable.add(ref);
+    return true;
+  });
 
   let saved = 0;
   for (const [ref, object] of doc.context.enumerateIndirectObjects()) {
-    if (reachable.has(ref.tag)) continue;
+    if (reachable.has(ref)) continue;
     saved += object instanceof PDFRawStream ? object.contents.byteLength : 0;
     doc.context.delete(ref);
   }
   return saved;
-}
-
-function refFromTag(tag: string): PDFRef {
-  const [objectNumber, generation] = tag.split(' ').map(Number);
-  return PDFRef.of(objectNumber ?? 0, generation ?? 0);
 }
 
 /** FNV-1a: a quick fingerprint to group candidates; equality is always checked in full. */
@@ -160,7 +146,7 @@ function hashBytes(bytes: Uint8Array): number {
   return hash >>> 0;
 }
 
-function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+function areBytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.byteLength !== b.byteLength) return false;
   for (let i = 0; i < a.byteLength; i++) if (a[i] !== b[i]) return false;
   return true;
