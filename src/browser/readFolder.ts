@@ -11,6 +11,8 @@ export const MAX_FILES = 2000;
 
 const TOO_MANY = `This folder has more than ${MAX_FILES.toLocaleString('en-US')} files. Choose the folder that holds just your application documents.`;
 const EMPTY = 'That folder is empty. Choose the folder that holds your documents.';
+const DRAG_FAILED =
+  'The browser couldn’t read everything you dragged in. Click “Choose folder…” and pick the same folder instead. If that also fails, check these have finished downloading from iCloud:';
 
 /** Reads the files chosen with <input type="file" webkitdirectory>. */
 export function folderFromInput(files: ArrayLike<File>): PickedFolder {
@@ -54,7 +56,16 @@ async function readDirectory(root: FileSystemDirectoryEntry): Promise<PickedFold
   const unreadable: string[] = [];
 
   async function walk(directory: FileSystemDirectoryEntry, path: string[]): Promise<void> {
-    for (const child of await readAllChildren(directory)) {
+    let children: FileSystemEntry[];
+    try {
+      children = await readAllChildren(directory);
+    } catch {
+      // Safari's drag-and-drop reader fails on some folders (for example
+      // certain characters in names). Note it and keep reading the rest.
+      unreadable.push(path.length > 0 ? `${path.join('/')}/` : `${root.name}/`);
+      return;
+    }
+    for (const child of children) {
       const childPath = [...path, child.name];
       if (child.isDirectory) {
         await walk(child as FileSystemDirectoryEntry, childPath);
@@ -70,12 +81,7 @@ async function readDirectory(root: FileSystemDirectoryEntry): Promise<PickedFold
   }
 
   await walk(root, []);
-  if (unreadable.length > 0) {
-    throw new UserFacingError(
-      'Some files in that folder couldn’t be read. Check they’ve finished downloading from iCloud.',
-      unreadable,
-    );
-  }
+  if (unreadable.length > 0) throw new UserFacingError(DRAG_FAILED, unreadable);
   if (entries.length === 0) throw new UserFacingError(EMPTY);
   return { name: root.name, entries };
 }

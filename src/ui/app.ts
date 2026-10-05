@@ -9,9 +9,15 @@ import { createOrderStep } from './orderStep';
 import { initialState, type AppState } from './state';
 import { Store } from './store';
 
+/** One section of the page; `update` re-renders it after the state changes. */
+interface Step {
+  readonly element: HTMLElement;
+  readonly update?: (state: AppState, previous: AppState) => void;
+}
+
 export function mountApp(root: HTMLElement, today: CalendarDate, services: Services): Store<AppState> {
   const store = new Store(initialState(today));
-  const steps = [
+  const steps: Step[] = [
     createDetailsStep(store),
     createFolderStep(store),
     createOrderStep(store),
@@ -38,6 +44,6 @@ export function mountApp(root: HTMLElement, today: CalendarDate, services: Servi
     h('main', null, ...steps.map((step) => step.element)),
   );
 
-  store.subscribe((state, previous) => steps.forEach((step) => step.update(state, previous)));
+  store.subscribe((state, previous) => steps.forEach((step) => step.update?.(state, previous)));
   return store;
 }

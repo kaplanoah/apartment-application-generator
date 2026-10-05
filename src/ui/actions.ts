@@ -50,7 +50,10 @@ export async function loadFolder(store: Store<AppState>, picking: Promise<Picked
       build: { status: 'idle' },
     }));
   } catch (error) {
-    store.update({ folderLoading: false, folderError: toNotice(error, 'That folder couldn’t be read.') });
+    store.update({
+      folderLoading: false,
+      folderError: toNotice(error, 'That folder couldn’t be read. Click “Choose folder…” and pick it again.'),
+    });
   }
 }
 
@@ -99,7 +102,11 @@ export async function generate(store: Store<AppState>, services: Services): Prom
       try {
         prepared.set(doc, await readDocument(doc, label, prepareImage));
       } catch (error) {
-        problems.push(error instanceof UserFacingError ? error.message : `${label}: couldn’t be read.`);
+        problems.push(
+          error instanceof UserFacingError
+            ? error.message
+            : `${label}: couldn’t be read. If it’s in iCloud, download it first (click the cloud icon in Finder).`,
+        );
       }
     }
     if (problems.length > 0) throw new UserFacingError('Some files couldn’t be added.', problems);
@@ -151,7 +158,13 @@ async function readDocument(
   return { label, kind: 'image', bytes: image.bytes, image: { format: image.format, turn: image.turn } };
 }
 
+/**
+ * Turns an error into something to show. Messages written for people are
+ * shown as-is; anything else gets the fallback, with the browser's own text
+ * labelled as a technical detail rather than presented as the explanation.
+ */
 export function toNotice(error: unknown, fallback: string): Notice {
   if (error instanceof UserFacingError) return { message: error.message, details: error.details };
-  return { message: fallback, details: error instanceof Error && error.message ? [error.message] : [] };
+  const technical = error instanceof Error ? error.message.trim() : '';
+  return { message: fallback, details: technical ? [`Technical detail: ${technical}`] : [] };
 }

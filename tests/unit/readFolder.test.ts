@@ -29,14 +29,15 @@ const fileEntry = (name: string, fail = false): FakeEntry => ({
   file: (resolve: (f: File) => void, reject: (e: Error) => void) =>
     fail ? reject(new Error('gone')) : resolve(new File(['x'], name)),
 });
-const dirEntry = (name: string, children: FakeEntry[], batch = 2): FakeEntry => ({
+const dirEntry = (name: string, children: FakeEntry[], batch = 2, fail = false): FakeEntry => ({
   name,
   isDirectory: true,
   isFile: false,
   createReader: () => {
     let offset = 0;
     return {
-      readEntries: (resolve: (entries: FakeEntry[]) => void) => {
+      readEntries: (resolve: (entries: FakeEntry[]) => void, reject: (error: Error) => void) => {
+        if (fail) return reject(new Error('A URI supplied to the API was malformed'));
         resolve(children.slice(offset, offset + batch));
         offset += batch;
       },
@@ -69,6 +70,19 @@ describe('folderFromDrop', () => {
     await expect(folderFromDrop(dropOf(dirEntry('A', []), dirEntry('B', [])))).rejects.toThrow(/just one folder/);
     await expect(folderFromDrop(dropOf(fileEntry('a.pdf')))).rejects.toThrow(/That’s a file/);
     await expect(folderFromDrop(dropOf(dirEntry('Empty', [])))).rejects.toThrow(/empty/);
+  });
+
+  it('keeps reading when the browser fails on one folder, then says to use Choose folder', async () => {
+    const root = dirEntry('Docs', [fileEntry('ok.pdf'), dirEntry('Apt #4B', [], 2, true), fileEntry('b.pdf')]);
+    const error = await folderFromDrop(dropOf(root)).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(UserFacingError);
+    expect((error as UserFacingError).message).toMatch(/Choose folder…/);
+    expect((error as UserFacingError).details).toEqual(['Apt #4B/']);
+  });
+
+  it('reports a dropped folder the browser cannot read at all', async () => {
+    const error = await folderFromDrop(dropOf(dirEntry('Docs', [], 2, true))).catch((e: unknown) => e);
+    expect((error as UserFacingError).details).toEqual(['Docs/']);
   });
 
   it('lists files that could not be read, such as iCloud placeholders', async () => {

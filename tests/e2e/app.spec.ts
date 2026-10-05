@@ -131,16 +131,12 @@ test('says it is local-only and ships a strict no-network policy', async ({ page
 
 test('builds a packet in the chosen order with cover, contents, links and footers', async ({ page }) => {
   const { outside, errors } = await openApp(page);
-  await page.getByLabel('Apartment address').fill('123 Main St, Apt 4B');
-  await expect(page.locator('#footer-preview')).toHaveText('Application for 123 Main St, Apt 4B only · Oct 2026');
+  await page.getByLabel('Address').fill('123 Main St, Apt 4B');
 
   await chooseFolder(page, docsFolder);
   await expect(page.locator('.drop-status')).toContainText('“Apartment Docs”');
-  await expect(page.locator('.people')).toContainText('Alex Sample');
-  await expect(page.locator('.people')).toContainText('jordan@example.com');
-  await expect(page.locator('#footer-preview')).toHaveText(
-    'Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B only · Oct 2026',
-  );
+  await expect(page.locator('.drop-status')).toContainText('contact info for 2 people');
+  await expect(page.locator('#contact-help')).toHaveCount(0);
   // Cover Letter.pages has its exported PDF beside it, so nothing asks for it.
   await expect(page.getByText('Save this as a PDF')).toHaveCount(0);
 
@@ -243,7 +239,7 @@ test('text files become pages, and the security details link points to the repos
   expect(pdf.pages[1]).toContain('Alex & Jordan');
 });
 
-test('cards can be reordered and removed with the keyboard', async ({ page }) => {
+test('cards can be reordered and removed with the keyboard or by dragging back', async ({ page }) => {
   await openApp(page);
   await chooseFolder(page, docsFolder);
   for (const title of ['Cover Letter', 'ID', 'Pets']) await addTile(page, title);
@@ -256,13 +252,18 @@ test('cards can be reordered and removed with the keyboard', async ({ page }) =>
 
   await page.keyboard.press('Delete');
   expect(await titles()).toEqual(['Cover Letter', 'ID']);
+
+  // Dragging a card back up to the tiles removes it too.
+  await card(page, 'ID').locator('.card').dragTo(page.locator('.pool'));
+  expect(await titles()).toEqual(['Cover Letter']);
+  await expect(page.getByRole('button', { name: 'Add ID', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add Pets', exact: true })).toBeVisible();
 });
 
 test('explains the contact file format when it is missing', async ({ page }) => {
   await openApp(page);
   await chooseFolder(page, noContactFolder);
-  const notice = page.locator('.applicants .notice');
+  const notice = page.locator('#contact-help');
   await expect(notice).toContainText('There’s no contact-info.txt');
   await expect(notice.locator('pre')).toContainText('Name: Alex Sample');
 });

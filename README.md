@@ -12,10 +12,11 @@ connects to the internet, and your documents are never transferred or stored. Se
 
 ## How it works
 
-1. **Your details.** Type the apartment's address. The footer on every page is made from
+1. **Apartment.** Type the apartment's address. The footer on every page is made from
    your names and the address, like
    `Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B only · Oct 2026`.
-2. **Documents folder.** Drag in the folder that holds all your documents.
+2. **Documents folder.** Drag in the folder that holds all your documents, or click
+   **Choose folder…** (the more reliable option in Safari).
 3. **Order.** Every top-level folder and file in it appears as a tile. Drag the ones this
    apartment wants into the list, in order, and drag a card back up to remove it. For
    folders with dated files, choose **Last 2 months** or **Last 2 documents**, for example.

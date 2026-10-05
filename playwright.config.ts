@@ -6,6 +6,8 @@ import { defineConfig, devices } from '@playwright/test';
  * engine) runs in CI, or locally with E2E_WEBKIT=1 once installed.
  */
 const withWebKit = Boolean(process.env.CI || process.env.E2E_WEBKIT);
+/** A typical laptop window, so drag targets are on screen without scrolling. */
+const LAPTOP = { width: 1440, height: 900 };
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -14,7 +16,7 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : 'list',
   use: { acceptDownloads: true, trace: 'retain-on-failure' },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    ...(withWebKit ? [{ name: 'webkit', use: { ...devices['Desktop Safari'] } }] : []),
+    { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: LAPTOP } },
+    ...(withWebKit ? [{ name: 'webkit', use: { ...devices['Desktop Safari'], viewport: LAPTOP } }] : []),
   ],
 });

@@ -100,6 +100,18 @@ describe('loadFolder', () => {
     ]);
   });
 
+  it('never presents raw browser errors as the explanation', async () => {
+    const store = newStore();
+    await loadFolder(
+      store,
+      Promise.reject(new DOMException('A URI supplied to the API was malformed', 'EncodingError')),
+    );
+    expect(store.get().folderError).toEqual({
+      message: 'That folder couldn’t be read. Click “Choose folder…” and pick it again.',
+      details: ['Technical detail: A URI supplied to the API was malformed'],
+    });
+  });
+
   it('refuses an unexpectedly large contact file', async () => {
     const store = newStore();
     const big = file('contact-info.txt', 'x'.repeat(70_000));
@@ -180,7 +192,7 @@ describe('generate', () => {
     expect(store.get().build).toEqual({
       status: 'error',
       message: 'Something went wrong while building the PDF.',
-      details: ['boom'],
+      details: ['Technical detail: boom'],
     });
   });
 });

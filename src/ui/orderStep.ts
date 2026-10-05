@@ -156,8 +156,11 @@ export function createOrderStep(store: Store<AppState>) {
         card?.addEventListener('dragstart', (event) => {
           if (event.target !== card) return;
           drag = { from: 'packet', index };
-          event.dataTransfer?.setData('text/plain', option.title);
-          if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+          if (event.dataTransfer) {
+            event.dataTransfer.setData('text/plain', option.title);
+            event.dataTransfer.effectAllowed = 'move';
+            showAsTile(event.dataTransfer, option);
+          }
           requestAnimationFrame(() => row.classList.add('dragging'));
         });
         card?.addEventListener('dragend', endDrag);
@@ -183,4 +186,17 @@ export function createOrderStep(store: Store<AppState>) {
 
   render(store.get());
   return { element, update: render };
+}
+
+/**
+ * While a card is dragged, the pointer carries a compact tile like the ones
+ * in the pool, so it reads as "put back" or "move" rather than a whole card.
+ * The browser snapshots the element at drag start, so it can be removed
+ * right after.
+ */
+function showAsTile(dataTransfer: DataTransfer, option: LibraryOption<File>): void {
+  const ghost = h('span', { class: 'tile drag-ghost', 'aria-hidden': 'true' }, option.title, optionIcon(option));
+  document.body.append(ghost);
+  dataTransfer.setDragImage(ghost, 18, ghost.offsetHeight / 2);
+  setTimeout(() => ghost.remove(), 0);
 }

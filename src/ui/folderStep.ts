@@ -1,4 +1,5 @@
 import { folderFromDrop, folderFromInput } from '../browser/readFolder';
+import { CONTACT_FILE_EXAMPLE, CONTACT_FILE_NAME } from '../core/contactInfo';
 import { loadFolder } from './actions';
 import { h, replaceChildren } from './dom';
 import type { AppState } from './state';
@@ -79,10 +80,13 @@ export function createFolderStep(store: Store<AppState>) {
       replaceChildren(status, 'Reading folder…');
     } else if (state.folder) {
       const count = state.folder.library.options.length;
+      const contact = state.folder.contact;
+      const people = contact.status === 'loaded' ? contact.info.applicants.length : 0;
       replaceChildren(
         status,
         h('strong', null, `“${state.folder.name}”`),
         ` · ${count} ${count === 1 ? 'item' : 'items'} to arrange`,
+        people > 0 && ` · contact info for ${people} ${people === 1 ? 'person' : 'people'}`,
       );
     } else {
       replaceChildren(status, 'Reads PDFs, photos (JPG, PNG, HEIC) and text files, loose or in folders.');
@@ -94,6 +98,7 @@ export function createFolderStep(store: Store<AppState>) {
     const unused = ignored.filter((item) => item.reason !== 'needs-pdf');
     replaceChildren(
       feedback,
+      !state.folderError && contactNotice(state),
       state.folderError &&
         h(
           'div',
@@ -135,4 +140,47 @@ export function createFolderStep(store: Store<AppState>) {
 
   update(store.get());
   return { element, update };
+}
+
+/** Explains contact-info.txt when it's missing or has lines that couldn't be used. */
+function contactNotice(state: AppState): HTMLElement | null {
+  const contact = state.folder?.contact;
+  if (!contact) return null;
+  const problems = contact.status === 'loaded' ? contact.info.problems : [];
+  const hasPeople = contact.status === 'loaded' && contact.info.applicants.length > 0;
+  if (hasPeople && problems.length === 0) return null;
+
+  if (hasPeople) {
+    return h(
+      'div',
+      { class: 'notice warn', role: 'status' },
+      h('p', null, `Some lines in ${CONTACT_FILE_NAME} were skipped:`),
+      h('ul', null, ...problems.map((problem) => h('li', null, problem))),
+    );
+  }
+  const why =
+    contact.status === 'missing'
+      ? `There’s no ${CONTACT_FILE_NAME} in “${state.folder?.name ?? ''}”, so the cover won’t list any names or contact details.`
+      : contact.status === 'unreadable'
+        ? contact.reason
+        : `${CONTACT_FILE_NAME} has no names in it.`;
+  return h(
+    'div',
+    { class: 'notice warn', role: 'status', id: 'contact-help' },
+    h('p', null, why),
+    problems.length > 0 && h('ul', null, ...problems.map((problem) => h('li', null, problem))),
+    h(
+      'p',
+      null,
+      'To add them, create a plain-text file named ',
+      h('code', null, CONTACT_FILE_NAME),
+      ' at the top of the folder, like this (in TextEdit choose Format → Make Plain Text):',
+    ),
+    h('pre', { class: 'example' }, CONTACT_FILE_EXAMPLE),
+    h(
+      'p',
+      null,
+      'One “Label: value” per line, a blank line between people, and each person starts with Name. Then add the folder again.',
+    ),
+  );
 }

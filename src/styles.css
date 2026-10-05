@@ -193,33 +193,6 @@ main {
 }
 
 /* Step 1 */
-.footer-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.footer-preview {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--muted);
-  background: var(--surface-2);
-  border-radius: var(--radius);
-  padding: 6px 10px;
-  overflow-wrap: anywhere;
-}
-
-.fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-@media (max-width: 640px) {
-  .fields {
-    grid-template-columns: 1fr;
-  }
-}
 
 .field {
   display: flex;
@@ -241,37 +214,10 @@ main {
   min-width: 0;
 }
 
-.applicants {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .label {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--muted);
-}
-
-.people {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 28px;
-}
-
-.people li {
-  display: flex;
-  flex-direction: column;
-  font-size: 0.88rem;
-  color: var(--muted);
-}
-
-.people strong {
-  color: var(--ink);
-  font-size: 0.95rem;
 }
 
 /* Notices */
@@ -407,6 +353,13 @@ main {
   padding: 6px 12px;
   font-weight: 500;
   cursor: grab;
+}
+
+.drag-ghost {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  pointer-events: none;
 }
 
 .tile:hover {
