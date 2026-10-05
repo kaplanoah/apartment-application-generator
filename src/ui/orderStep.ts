@@ -89,16 +89,7 @@ export function createOrderStep(store: Store<AppState>) {
       return;
     }
     if (!body.contains(pool)) {
-      replaceChildren(
-        body,
-        h(
-          'p',
-          { class: 'hint' },
-          'Drag what this apartment wants into the list, in order. Click a tile to add it to the end.',
-        ),
-        pool,
-        list,
-      );
+      replaceChildren(body, h('p', { class: 'hint' }, 'Drag items in order. Click to add it to the end.'), pool, list);
     }
     renderPool(state, folder.library.options);
     preservingFocus(list, () => renderList(state));
