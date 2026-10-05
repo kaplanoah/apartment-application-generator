@@ -62,8 +62,8 @@ The rules:
 
 - **Each top-level folder and top-level file is one option** you can drag into the packet.
   Folder names are used as section titles, so name them the way you want them to read.
-- **Files associated with years or months must end with the format YYYY, YYYY-MM, or
-  YYYY-MM-DD**, so date ranges work: `w2_2025.pdf`, `2026-09.pdf`, `jordan_2026-09-30.pdf`.
+- **Files associated with years or months must end with the format YYYY-MM-DD, YYYY-MM,
+  or YYYY**, so date ranges work: `w2_2025.pdf`, `2026-09.pdf`, `jordan_2026-09-30.pdf`.
   US-style dates like `09-10-2026` are ignored because they're ambiguous.
 - **Subfolders are fine** (for example one per person). Their names don't matter. They're
   only shown as faint labels.

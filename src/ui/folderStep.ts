@@ -41,9 +41,7 @@ export function createFolderStep(store: Store<AppState>) {
     h(
       'p',
       { class: 'faint' },
-      'Files associated with years or months must end with the format YYYY, YYYY-MM, or YYYY-MM-DD.',
-      h('br'),
-      'Drag and drop isn’t supported: browsers don’t read large, nested folders reliably that way.',
+      'Files associated with years or months must end with the format YYYY-MM-DD, YYYY-MM, or YYYY.',
     ),
     input,
   );
@@ -87,10 +85,7 @@ export function createFolderStep(store: Store<AppState>) {
         people > 0 && ` · contact info for ${people} ${people === 1 ? 'person' : 'people'}`,
       );
     } else {
-      replaceChildren(
-        status,
-        'Pick the folder that holds your documents: PDFs, photos (JPG, PNG, HEIC) and text files.',
-      );
+      replaceChildren(status);
     }
 
     const ignored = state.folder?.library.ignored ?? [];

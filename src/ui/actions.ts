@@ -79,7 +79,13 @@ async function readContactFile(file: File | null): Promise<ContactState> {
 /** Reads the chosen files, prepares photos, builds the PDF in the sealed worker and saves it. */
 export async function generate(store: Store<AppState>, services: Services): Promise<void> {
   const state = store.get();
-  if (!state.folder || state.build.status === 'working') return;
+  if (state.build.status === 'working') return;
+  if (!state.folder) {
+    store.update({
+      build: { status: 'error', message: 'Choose your documents folder first, in step 2.', details: [] },
+    });
+    return;
+  }
 
   const sections = planPacket(state.folder.library, state.packet, state.today);
   if (sections.length === 0) {

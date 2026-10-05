@@ -167,6 +167,9 @@ describe('generate', () => {
 
   it('explains when there is nothing to build', async () => {
     const store = newStore();
+    await generate(store, fakeServices());
+    expect(store.get().build).toMatchObject({ status: 'error', message: expect.stringMatching(/folder first/) });
+
     await loadFolder(store, sampleFolder());
     await generate(store, fakeServices());
     expect(store.get().build).toMatchObject({
