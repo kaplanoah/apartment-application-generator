@@ -65,7 +65,7 @@ describe('buildPacket', () => {
 
     const front = pdf.pages[0] ?? '';
     for (const text of [
-      'Rental Application',
+      'Rental application for 123 Main St, Apt 4B',
       '123 Main St, Apt 4B',
       'October 2026',
       'Alex Sample',
@@ -147,6 +147,7 @@ describe('buildPacket', () => {
     ]);
     const pdf = await readPdf(packet.bytes);
     expect(pdf.title).toBe('Rental Application');
+    expect(pdf.pages[0]).toMatch(/^Rental Application October 2026/); // the title is the headline without an address
     expect(pdf.pages[1]).toContain('Page 2 of 2');
   });
 

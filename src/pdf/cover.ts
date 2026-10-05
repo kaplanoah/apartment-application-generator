@@ -27,7 +27,7 @@ export interface CoverFonts {
 
 const INK = rgb(0.11, 0.13, 0.19);
 const MUTED = rgb(0.4, 0.44, 0.52);
-const LINE = rgb(0.85, 0.86, 0.89);
+const LINE = rgb(0.85, 0.86, 0.89); // dot leaders
 
 export function planCover(details: CoverDetails, entryCount: number): CoverLayout {
   return layoutCover({
@@ -60,40 +60,41 @@ export function drawCover(
   ) => page.drawText(fitText(sanitize(text), font, size, maxWidth), { x, y, size, font, color });
 
   const first = pageAt(0);
-  write(first, 'Rental Application', layout.title.x, layout.title.y, COVER.titleSize, bold, COVER.contentWidth);
+  // With an address: a small "Rental application for" above the address in
+  // large type. Without one, "Rental Application" is the headline.
   if (layout.address) {
+    write(
+      first,
+      'Rental application for',
+      layout.title.x,
+      layout.title.y,
+      layout.title.size,
+      regular,
+      COVER.contentWidth,
+      MUTED,
+    );
     write(
       first,
       details.address.trim(),
       layout.address.x,
       layout.address.y,
-      COVER.addressSize,
-      regular,
+      layout.address.size,
+      bold,
       COVER.contentWidth,
-      MUTED,
     );
+  } else {
+    write(first, 'Rental Application', layout.title.x, layout.title.y, layout.title.size, bold, COVER.contentWidth);
   }
-  write(
-    first,
-    formatLongMonthYear(details.preparedOn),
-    layout.prepared.x,
-    layout.prepared.y,
-    COVER.metaSize,
-    regular,
-    COVER.contentWidth,
-    MUTED,
-  );
+  const month = sanitize(formatLongMonthYear(details.preparedOn));
+  first.drawText(month, {
+    x: layout.date.x - regular.widthOfTextAtSize(month, COVER.metaSize),
+    y: layout.date.y,
+    size: COVER.metaSize,
+    font: regular,
+    color: MUTED,
+  });
 
-  for (const rule of layout.rules) {
-    pageAt(rule.page).drawLine({
-      start: { x: rule.x, y: rule.y },
-      end: { x: rule.x + COVER.contentWidth, y: rule.y },
-      thickness: 0.75,
-      color: LINE,
-    });
-  }
-
-  const columnWidth = COVER.contentWidth / COVER.columns - 10;
+  const columnWidth = layout.applicantColumnWidth - 12;
   details.applicants.forEach((applicant, i) => {
     const spot = layout.applicants[i];
     if (!spot) return;

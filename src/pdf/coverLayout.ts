@@ -8,12 +8,15 @@ import { LETTER } from './geometry';
 export const COVER = {
   marginX: 72,
   top: LETTER.height - 72,
+  /** Extra breathing room above the title on the first cover page. */
+  firstPageTopGap: 40,
   bottom: 72,
   contentWidth: LETTER.width - 144,
   /** The contents list is inset on both sides so its lines stay short. */
   contentsInset: 48,
-  titleSize: 26,
-  addressSize: 13,
+  /** The address is the largest text; without one, the title takes that size. */
+  heroSize: 26,
+  labelSize: 13,
   metaSize: 9,
   nameSize: 11,
   detailSize: 9.5,
@@ -46,14 +49,20 @@ export interface Positioned {
   readonly y: number;
 }
 
+export interface SizedText extends Positioned {
+  readonly size: number;
+}
+
 export interface CoverLayout {
   readonly pageCount: number;
-  readonly title: Positioned;
-  readonly address: Positioned | null;
-  readonly prepared: Positioned;
-  readonly rules: readonly Positioned[];
+  /** "Rental application for": a small label above the address, or the headline without one. */
+  readonly title: SizedText;
+  readonly address: SizedText | null;
+  /** The month, right-aligned in the top-right corner: `x` is the right edge. */
+  readonly date: Positioned;
   /** Baseline of each applicant's name. */
   readonly applicants: readonly Positioned[];
+  readonly applicantColumnWidth: number;
   /** "Contents" heading on each cover page that lists entries. */
   readonly headings: readonly Positioned[];
   /** Baseline of each contents entry. */
@@ -62,51 +71,54 @@ export interface CoverLayout {
 
 export function layoutCover(input: CoverLayoutInput): CoverLayout {
   const x = COVER.marginX;
-  let y = COVER.top - COVER.titleSize;
-  const title = { page: 0, x, y };
+  const date = { page: 0, x: x + COVER.contentWidth, y: COVER.top - COVER.metaSize };
 
-  let address: Positioned | null = null;
+  const titleSize = input.hasAddress ? COVER.labelSize : COVER.heroSize;
+  let y = COVER.top - COVER.firstPageTopGap - titleSize;
+  const title = { page: 0, x, y, size: titleSize };
+
+  let address: SizedText | null = null;
   if (input.hasAddress) {
-    y -= 22;
-    address = { page: 0, x, y };
+    y -= COVER.heroSize + 10;
+    address = { page: 0, x, y, size: COVER.heroSize };
   }
-  y -= 18;
-  const prepared = { page: 0, x, y };
 
-  y -= 18;
-  const rules: Positioned[] = [{ page: 0, x, y }];
-
+  // Applicants and contents share one inset column, centered on the page.
+  const columnLeft = CONTENTS_SPAN.left;
+  const columnWidth = CONTENTS_SPAN.right - CONTENTS_SPAN.left;
+  const count = input.applicantDetailCounts.length;
+  const perRow = Math.max(1, Math.min(COVER.columns, count));
+  const applicantColumnWidth = columnWidth / perRow;
   const applicants: Positioned[] = [];
-  if (input.applicantDetailCounts.length > 0) {
-    const columnWidth = COVER.contentWidth / COVER.columns;
-    let rowTop = y - 24;
-    for (let start = 0; start < input.applicantDetailCounts.length; start += COVER.columns) {
-      const row = input.applicantDetailCounts.slice(start, start + COVER.columns);
-      row.forEach((_, column) => applicants.push({ page: 0, x: x + column * columnWidth, y: rowTop }));
+  if (count > 0) {
+    let rowTop = y - 52;
+    for (let start = 0; start < count; start += perRow) {
+      const row = input.applicantDetailCounts.slice(start, start + perRow);
+      row.forEach((_, column) =>
+        applicants.push({ page: 0, x: columnLeft + column * applicantColumnWidth, y: rowTop }),
+      );
       const tallest = Math.max(...row.map((lines) => COVER.nameLeading + lines * COVER.detailLeading));
       rowTop -= tallest + COVER.rowGap;
     }
-    y = rowTop + COVER.rowGap - 6;
-    rules.push({ page: 0, x, y });
+    y = rowTop + COVER.rowGap;
   }
 
   const headings: Positioned[] = [];
   const entries: Positioned[] = [];
-  const contentsX = x + COVER.contentsInset;
   let page = 0;
-  y -= 30;
-  headings.push({ page, x: contentsX, y });
+  y -= count > 0 ? 34 : 52;
+  headings.push({ page, x: columnLeft, y });
   y -= 26;
   for (let i = 0; i < input.entryCount; i++) {
     if (y < COVER.bottom) {
       page += 1;
       y = COVER.top - COVER.headingSize;
-      headings.push({ page, x: contentsX, y });
+      headings.push({ page, x: columnLeft, y });
       y -= 26;
     }
-    entries.push({ page, x: contentsX, y });
+    entries.push({ page, x: columnLeft, y });
     y -= COVER.entryHeight;
   }
 
-  return { pageCount: page + 1, title, address, prepared, rules, applicants, headings, entries };
+  return { pageCount: page + 1, title, address, date, applicants, applicantColumnWidth, headings, entries };
 }

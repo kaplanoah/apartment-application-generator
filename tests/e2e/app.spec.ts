@@ -168,9 +168,8 @@ test('builds a packet in the chosen order with cover, contents, links and footer
 
   const cover = pdf.pages[0] ?? '';
   for (const text of [
-    'Rental Application',
-    '123 Main St, Apt 4B',
     'October 2026',
+    'Rental application for 123 Main St, Apt 4B',
     'Alex Sample',
     'jordan@example.com',
     'CONTENTS',

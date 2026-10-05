@@ -156,7 +156,7 @@ select {
 }
 
 .local-only .icon {
-  color: var(--good);
+  color: var(--muted);
   width: 16px;
   height: 16px;
 }
@@ -264,7 +264,7 @@ main {
 
 /* Step 2 */
 .dropzone {
-  border: 2px dashed var(--line);
+  border: 1px dashed var(--line);
   border-radius: var(--radius-lg);
   padding: 26px 16px;
   text-align: center;
@@ -413,7 +413,7 @@ main {
 }
 
 .packet.empty {
-  border: 2px dashed var(--line);
+  border: 1px dashed var(--line);
   border-radius: var(--radius-lg);
   display: grid;
   place-items: center;
