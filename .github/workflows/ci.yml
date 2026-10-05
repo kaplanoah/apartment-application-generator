@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [master]
+    branches: [main]
 
 permissions:
   contents: read
@@ -123,7 +123,7 @@ jobs:
           path: dist/index.html
 
   # Reviews every push to a pull request, so fixes for its comments are reviewed too. It
-  # passes when there's nothing to review, such as a push to master, since check fails on
+  # passes when there's nothing to review, such as a push to main, since check fails on
   # a skipped job.
   review:
     runs-on: ubuntu-latest

@@ -40,6 +40,6 @@ checks pull requests against them.
 
 ## Shipping a change
 
-1. Work on a branch and open a pull request; never push to `master` directly.
+1. Work on a branch and open a pull request; never push to `main` directly.
 2. Before pushing, run `npm run check` (format, lint, types, dead code, unit and browser tests).
 3. Merge only when the CI `check` job is green and review comments are resolved.
