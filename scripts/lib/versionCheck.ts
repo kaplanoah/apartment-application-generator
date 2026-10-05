@@ -1,0 +1,86 @@
+/**
+ * Decides what a pull request means for the app's version: whether merging it
+ * publishes a release, and whether it should have bumped the version.
+ */
+
+/** Paths that end up in the built app; changing them changes what people download. */
+const APP_PATHS = [/^src\//, /^build\//, /^index\.html$/, /^vite\.config\.ts$/];
+
+export interface VersionCheckInput {
+  readonly baseVersion: string;
+  readonly headVersion: string;
+  /** The version recorded in package-lock.json, which must match package.json. */
+  readonly lockVersion: string;
+  readonly changedFiles: readonly string[];
+}
+
+export interface VersionCheckResult {
+  readonly ok: boolean;
+  readonly message: string;
+  /** The version merging publishes, like "v1.1.0", or null for none. */
+  readonly releases: string | null;
+}
+
+const BUMP_HELP =
+  'Bump it with `npm version patch --no-git-tag-version` for fixes and polish, `minor` for new features, or `major` for breaking changes.';
+
+export function checkVersion({
+  baseVersion,
+  headVersion,
+  lockVersion,
+  changedFiles,
+}: VersionCheckInput): VersionCheckResult {
+  const base = parseVersion(baseVersion);
+  const head = parseVersion(headVersion);
+  if (!head) {
+    return { ok: false, releases: null, message: `package.json has version "${headVersion}"; use the form 1.2.3.` };
+  }
+  if (lockVersion !== headVersion) {
+    return {
+      ok: false,
+      releases: null,
+      message: `package-lock.json says ${lockVersion} but package.json says ${headVersion}. Run \`npm install\` to update it.`,
+    };
+  }
+  const order = base ? compareVersions(head, base) : 1;
+  if (order < 0) {
+    return { ok: false, releases: null, message: `The version goes backwards, from ${baseVersion} to ${headVersion}.` };
+  }
+  if (order > 0) {
+    return {
+      ok: true,
+      releases: `v${headVersion}`,
+      message: `Merging this releases v${headVersion} (now v${baseVersion}).`,
+    };
+  }
+
+  const appChanges = changedFiles.filter((file) => APP_PATHS.some((pattern) => pattern.test(file)));
+  if (appChanges.length > 0) {
+    const shown = appChanges.slice(0, 3).join(', ') + (appChanges.length > 3 ? ', …' : '');
+    return {
+      ok: false,
+      releases: null,
+      message: `This changes the app (${shown}) but keeps version ${headVersion}. ${BUMP_HELP}`,
+    };
+  }
+  return {
+    ok: true,
+    releases: null,
+    message: `Merging this doesn't release a new version: only docs, tests or tooling change.`,
+  };
+}
+
+type Version = readonly [major: number, minor: number, patch: number];
+
+function parseVersion(text: string): Version | null {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(text);
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+}
+
+function compareVersions(a: Version, b: Version): number {
+  for (let i = 0; i < 3; i++) {
+    const difference = (a[i] as number) - (b[i] as number);
+    if (difference !== 0) return Math.sign(difference);
+  }
+  return 0;
+}

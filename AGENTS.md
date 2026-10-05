@@ -43,3 +43,6 @@ checks pull requests against them.
 1. Work on a branch and open a pull request; never push to `main` directly.
 2. Before pushing, run `npm run check` (format, lint, types, dead code, unit and browser tests).
 3. Merge only when the CI `check` job is green and review comments are resolved.
+4. A change to the app (`src/`, `build/`, `index.html`, `vite.config.ts`) bumps `version` in
+   `package.json`: patch for fixes and polish, minor for new features, major for breaking
+   changes. Merging it publishes the release automatically.
