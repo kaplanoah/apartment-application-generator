@@ -229,7 +229,7 @@ test('builds a packet in the chosen order with cover, contents, links and footer
   }
   // No item numbers in the contents, only page numbers.
   expect(cover).toContain(
-    'CONTENTS Cover Letter 2 Pay Stubs · last 1 3 W-2s · last 2 5 Bank Statements · last 2 months 9',
+    'CONTENTS Cover Letter 2 Pay Stubs (last 1) 3 W-2s (last 2) 5 Bank Statements (last 2 months) 9',
   );
 
   expect(pdf.pages[1]).toContain('Cover Letter');

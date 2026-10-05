@@ -34,6 +34,18 @@ const imageDoc = async (label: string, bytes: Uint8Array): Promise<PacketDocumen
 };
 
 describe('buildPacket', () => {
+  it('shortens a long range note inside its parentheses', async () => {
+    const packet = await buildPacket(cover, [
+      {
+        title: 'Employment letters',
+        description: 'last 12 months through today, counting from the start of the most recent month',
+        documents: [await pdfDoc('letter')],
+      },
+    ]);
+    const front = (await readPdf(packet.bytes)).pages[0] ?? '';
+    expect(front).toMatch(/\(last 12 months[^)]*…\)/);
+  });
+
   it('builds cover, contents with page numbers, sections in order, links, bookmarks and footers', async () => {
     const progress: number[] = [];
     const packet = await buildPacket(
@@ -76,7 +88,7 @@ describe('buildPacket', () => {
     ]) {
       expect(front).toContain(text);
     }
-    expect(front).toMatch(/CONTENTS Cover Letter 2 Pay Stubs · last 2 months 3 ID 6/);
+    expect(front).toMatch(/CONTENTS Cover Letter 2 Pay Stubs \(last 2 months\) 3 ID 6/);
     expect(pdf.pages[1]).toContain('Cover Letter.pdf');
     expect(pdf.pages[2]).toContain('stub A');
     expect(pdf.pages[3]).toContain('stub B');
