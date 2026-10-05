@@ -14,7 +14,7 @@ connects to the internet, and your documents are never transferred or stored. Se
 
 1. **Apartment.** Type the apartment's address. The footer on every page is made from
    your names and the address, like
-   `Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B only · Oct 2026`.
+   `Alex Sample & Jordan Sample · Application for 123 Main St, Apt 4B · Oct 2026`.
 2. **Documents folder.** Click **Choose folder…** and pick the folder that holds all your
    documents. (Drag and drop isn't supported: browsers don't read large, nested folders
    reliably that way.)
@@ -122,15 +122,22 @@ Text is never changed, so it stays sharp. Only photos and scanned images are res
 including the ones inside PDFs (a scanned ID saved as a PDF is usually one big photo).
 Sizes are based on how large an image prints on a letter page:
 
-| Choice                 | Photos and scans    | Good for                           |
-| ---------------------- | ------------------- | ---------------------------------- |
-| Smaller                | about 110 dpi       | email and upload limits            |
-| **Balanced** (default) | about 150 dpi       | almost everything. IDs stay crisp. |
-| Full quality           | original resolution | when every pixel matters           |
+| Choice                 | Photos and scans | Good for                               |
+| ---------------------- | ---------------- | -------------------------------------- |
+| Smaller                | about 110 dpi    | email and upload limits                |
+| **Balanced** (default) | about 150 dpi    | almost everything. IDs stay crisp.     |
+| High                   | about 300 dpi    | printing. Looks the same as originals. |
 
 An image is only re-encoded when it's bigger than the limit, and only if the result is
 actually smaller, so nothing is compressed twice. Images the app can't safely change (CMYK,
 masked or unusual formats) are kept exactly as they are.
+
+Every packet is also cleaned up losslessly, whichever size you pick: logos, fonts and
+images repeated across documents (a year of bank statements, say) are stored once,
+uncompressed data is compressed, and leftovers like page thumbnails are dropped. Nothing
+you can see changes.
+
+For packets over 5 MB, the app shows which sections take up the most space afterwards.
 
 ## Troubleshooting
 

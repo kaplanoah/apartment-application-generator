@@ -40,7 +40,7 @@ scope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       onProgress: (done, total) => reply({ type: 'progress', done, total }),
       imageLimits: request.imageLimits ? { ...request.imageLimits, shrink: askPageToShrink } : undefined,
     });
-    reply({ type: 'done', bytes: packet.bytes, pageCount: packet.pageCount }, [packet.bytes.buffer as ArrayBuffer]);
+    reply({ type: 'done', ...packet }, [packet.bytes.buffer as ArrayBuffer]);
   } catch (error) {
     const expected = error instanceof UserFacingError;
     reply({

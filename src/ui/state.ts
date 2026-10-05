@@ -16,6 +16,14 @@ interface LoadedFolder {
   readonly contact: ContactState;
 }
 
+/** Where a packet's size comes from, shown after generating a large one. */
+export interface SizeReport {
+  /** Each section's original size and roughly what it takes up in the packet, largest first. */
+  readonly sections: readonly { readonly title: string; readonly before: number; readonly after: number }[];
+  /** Saved by storing repeated images and fonts once, and similar lossless clean-up. */
+  readonly sharedSaved: number;
+}
+
 export interface Notice {
   readonly message: string;
   readonly details: readonly string[];
@@ -25,7 +33,13 @@ type BuildStatus =
   | { readonly status: 'idle' }
   /** `progress` runs from 0 to 1 across reading the files and building the PDF. */
   | { readonly status: 'working'; readonly progress: number; readonly label: string }
-  | { readonly status: 'done'; readonly fileName: string; readonly pageCount: number; readonly byteLength: number }
+  | {
+      readonly status: 'done';
+      readonly fileName: string;
+      readonly pageCount: number;
+      readonly byteLength: number;
+      readonly sizeReport: SizeReport;
+    }
   | ({ readonly status: 'error' } & Notice);
 
 export interface AppState {

@@ -1,6 +1,8 @@
 import { degrees, PDFDocument, StandardFonts, type PDFFont, type PDFPage } from 'pdf-lib';
 import { UserFacingError } from '../core/errors';
 import type { DocumentKind } from '../core/fileTypes';
+import { cleanUpPacket } from './cleanup';
+import { measurePageGroups } from './measure';
 import { drawCover, planCover, type ContentsEntry, type CoverDetails } from './cover';
 import { CONTENTS_SPAN } from './coverLayout';
 import { stampFooters } from './footer';
@@ -29,6 +31,10 @@ export interface PacketSection {
 export interface BuiltPacket {
   readonly bytes: Uint8Array;
   readonly pageCount: number;
+  /** Roughly how many bytes each section takes up in the packet; shared parts are counted once. */
+  readonly sectionBytes: readonly number[];
+  /** Bytes saved across the packet by the lossless clean-up (shared duplicates and such). */
+  readonly cleanupSavings: number;
 }
 
 type ProgressListener = (done: number, total: number) => void;
@@ -106,7 +112,9 @@ export async function buildPacket(
   const { entryRows } = drawCover(doc, layout, cover, entries, fonts);
 
   const sectionStarts: PDFPage[] = [];
+  const sectionPages: PDFPage[][] = [];
   for (const items of loaded) {
+    const start = doc.getPageCount();
     let first: PDFPage | undefined;
     for (const item of items) {
       const added =
@@ -118,6 +126,7 @@ export async function buildPacket(
       first ??= added;
     }
     if (first) sectionStarts.push(first);
+    sectionPages.push(doc.getPages().slice(start));
   }
 
   entryRows.forEach((row, i) => {
@@ -140,10 +149,13 @@ export async function buildPacket(
     }),
   );
   stampFooters(doc, regular, fonts.sanitize(cover.footerText));
+  await doc.flush();
+  const cleanupSavings = cleanUpPacket(doc);
+  const sectionBytes = measurePageGroups(doc, sectionPages);
 
   const bytes = await doc.save({ useObjectStreams: true });
   onProgress(total, total);
-  return { bytes, pageCount: doc.getPageCount() };
+  return { bytes, pageCount: doc.getPageCount(), sectionBytes, cleanupSavings };
 }
 
 const pagesOf = (item: LoadedDocument): number =>

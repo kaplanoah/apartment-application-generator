@@ -656,6 +656,17 @@ main {
   background: var(--accent);
 }
 
+.size-report {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.size-report ul {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
 .generate-row {
   display: flex;
   justify-content: space-between;

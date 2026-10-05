@@ -35,7 +35,8 @@ export async function buildPacketInWorker(
     const transfer = sections.flatMap((section) => section.documents.map((doc) => doc.bytes.buffer as ArrayBuffer));
     const result = await request(worker, { type: 'build', cover, sections, imageLimits }, transfer, listeners);
     if (result.type !== 'done') throw new Error('Unexpected reply from the PDF builder.');
-    return { bytes: result.bytes, pageCount: result.pageCount };
+    const { bytes, pageCount, sectionBytes, cleanupSavings } = result;
+    return { bytes, pageCount, sectionBytes, cleanupSavings };
   } finally {
     worker.terminate();
   }
