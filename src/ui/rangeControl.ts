@@ -87,5 +87,5 @@ function select(
 }
 
 /** Wraps a select so it can be styled with a consistent size and chevron. */
-const styled = (select: HTMLSelectElement, size: 'large' | 'small' = 'large'): HTMLElement =>
+const styled = (select: HTMLSelectElement, size: 'medium' | 'small' = 'medium'): HTMLElement =>
   h('span', { class: `select ${size}` }, select);
