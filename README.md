@@ -209,15 +209,13 @@ violations. To turn that on in your copy, add a `CLAUDE_CODE_OAUTH_TOKEN` (or
 
 Versions follow [semantic versioning](https://semver.org). To publish one, merge a pull
 request that sets the new `version` in `package.json` (`npm version 1.1.0
---no-git-tag-version`), then tag that commit on `main` and push the tag:
+--no-git-tag-version`). Then, on GitHub, open **Actions → Release → Run workflow** on
+`main`. Pushing a matching tag (`git tag v1.1.0 && git push origin v1.1.0`) works too.
 
-```sh
-git tag v1.1.0 && git push origin v1.1.0
-```
-
-The Release workflow checks the tag matches `package.json`, runs every check, builds the
-app and publishes `apartment-packet-builder.html`, a zip with the example folder and their
-checksums on the Releases page. The README's download link always points at the latest one.
+The Release workflow runs every check, builds the app, tags the commit and publishes
+`apartment-packet-builder.html`, a zip with the example folder and their checksums on the
+Releases page. It refuses a version that's already released, or a tag that doesn't match
+`package.json`. The README's download link always points at the latest release.
 
 ## License
 
