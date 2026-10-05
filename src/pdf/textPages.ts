@@ -53,6 +53,7 @@ export function wrapLines(lines: readonly string[], font: PDFFont, size: number,
   const wrapped: string[] = [];
 
   for (const line of lines) {
+    const start = wrapped.length;
     let current = '';
     for (const piece of line.match(/ +|[^ ]+/g) ?? []) {
       if (fits(current + piece)) {
@@ -70,7 +71,8 @@ export function wrapLines(lines: readonly string[], font: PDFFont, size: number,
         current += char;
       }
     }
-    wrapped.push(current.trimEnd());
+    // A blank line stays, but spaces that wrapped past the end of a line don't make one.
+    if (current.trim() || wrapped.length === start) wrapped.push(current.trimEnd());
   }
   return wrapped;
 }

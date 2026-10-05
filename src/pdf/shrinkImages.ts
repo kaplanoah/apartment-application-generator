@@ -217,9 +217,10 @@ function readFlatePredictor(
 }
 
 /**
- * Unpacks the image's data for re-encoding, or returns null if it isn't what it claims. Nothing
- * is unpacked beyond the size its dictionary states, which describeImage keeps within
- * MAX_SHRINK_PIXELS, and a JPEG's own size must match it too, since the page decodes it.
+ * Unpacks the image's data for re-encoding, or returns null if it isn't what it claims.
+ * Unpacking stops at about the size its dictionary states, which describeImage keeps within
+ * MAX_SHRINK_PIXELS (pdf-lib unpacks a whole compressed block at a time, so it can go past by
+ * one block). A JPEG's own size must match the dictionary too, since the page decodes it.
  */
 function readImageSource(pdf: PDFDocument, stream: PDFRawStream, image: ImageInfo): ImageSource | null {
   const rowLength = image.width * image.channels;

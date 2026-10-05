@@ -3,7 +3,7 @@ import type { LibraryOption } from '../core/library';
 import { setPacket } from './actions';
 import { findByFocusKey, h, preservingFocus, replaceChildren } from './dom';
 import { optionIcon } from './icons';
-import { cardFocusKey, cardHelp, packetCard } from './packetCard';
+import { makeCardFocusKey, createCardHelp, packetCard } from './packetCard';
 import type { AppState } from './state';
 import { hasChanged, type Store } from './store';
 
@@ -16,7 +16,7 @@ type DragSource =
  */
 const DRAG_TYPE = 'application/x-packet-item';
 
-const tileFocusKey = (optionId: string) => `tile:${optionId}`;
+const makeTileFocusKey = (optionId: string) => `tile:${optionId}`;
 
 /** Step 3: tiles for every top-level folder and file, dragged into an ordered list. */
 export function createOrderStep(store: Store<AppState>) {
@@ -112,7 +112,7 @@ export function createOrderStep(store: Store<AppState>) {
         h('p', { class: 'hint' }, 'Drag items in order. Click to add it to the end.'),
         pool,
         list,
-        cardHelp(),
+        createCardHelp(),
       );
     }
     preservingFocus(pool, () => renderPool(state, folder.library.options));
@@ -132,7 +132,7 @@ export function createOrderStep(store: Store<AppState>) {
             class: 'tile',
             draggable: 'true',
             'aria-label': `Add ${option.title}`,
-            'data-focus-key': tileFocusKey(option.id),
+            'data-focus-key': makeTileFocusKey(option.id),
           },
           option.title,
           optionIcon(option),
@@ -141,7 +141,7 @@ export function createOrderStep(store: Store<AppState>) {
           insertAt(store.get().packet.length, { from: 'pool', optionId: option.id });
           // Keep going from the same place in the pool, so pressing Enter again adds the next one.
           if (!focusNearest(pool.querySelectorAll('.tile'), position)) {
-            findByFocusKey(list, cardFocusKey(option.id))?.focus();
+            findByFocusKey(list, makeCardFocusKey(option.id))?.focus();
           }
         });
         tile.addEventListener('dragstart', (event) => startDrag(event, { from: 'pool', optionId: option.id }));
@@ -202,7 +202,7 @@ export function createOrderStep(store: Store<AppState>) {
             );
             // The next card takes its place; after the last one, the tile it went back to.
             if (!focusNearest(list.querySelectorAll('.card'), index)) {
-              findByFocusKey(pool, tileFocusKey(option.id))?.focus();
+              findByFocusKey(pool, makeTileFocusKey(option.id))?.focus();
             }
           }
         });

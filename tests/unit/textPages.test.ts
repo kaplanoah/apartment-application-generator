@@ -72,6 +72,12 @@ describe('wrapLines', () => {
     expect(lines.every((line) => font.widthOfTextAtSize(line, 12) <= 100)).toBe(true);
     expect(lines.at(-1)).toBe('after');
   });
+
+  it("adds no blank line when only the spaces at the end of a line don't fit", () => {
+    const width = font.widthOfTextAtSize('Alex Sample', 12);
+    expect(wrapLines(['Alex Sample ', 'next'], font, 12, width)).toEqual(['Alex Sample', 'next']);
+    expect(wrapLines(['Alex Sample   Jordan'], font, 12, width)).toEqual(['Alex Sample', 'Jordan']);
+  });
 });
 
 describe('paginate', () => {

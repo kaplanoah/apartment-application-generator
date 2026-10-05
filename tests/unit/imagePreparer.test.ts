@@ -1,24 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { canvasShrinkFactor, MAX_CANVAS_PIXELS, toRgbaPixels } from '../../src/browser/imagePreparer';
+import { chooseCanvasShrinkFactor, MAX_CANVAS_PIXELS, toRgbaPixels } from '../../src/browser/imagePreparer';
 
-describe('canvasShrinkFactor', () => {
+describe('chooseCanvasShrinkFactor', () => {
   it('keeps images that fit on an iPhone or iPad canvas at full size', () => {
     expect(MAX_CANVAS_PIXELS).toBe(4096 * 4096);
-    expect(canvasShrinkFactor(4096, 4096)).toBe(1);
-    expect(canvasShrinkFactor(1, MAX_CANVAS_PIXELS)).toBe(1);
+    expect(chooseCanvasShrinkFactor(4096, 4096)).toBe(1);
+    expect(chooseCanvasShrinkFactor(1, MAX_CANVAS_PIXELS)).toBe(1);
   });
 
   it('shrinks bigger images by just enough to fit', () => {
-    expect(canvasShrinkFactor(4097, 4096)).toBe(2);
-    expect(canvasShrinkFactor(8000, 6000)).toBe(2); // 48 MP → 12 MP
-    expect(canvasShrinkFactor(10_000, 5_000)).toBe(2);
-    expect(canvasShrinkFactor(12_000, 12_000)).toBe(3);
+    expect(chooseCanvasShrinkFactor(4097, 4096)).toBe(2);
+    expect(chooseCanvasShrinkFactor(8000, 6000)).toBe(2); // 48 MP → 12 MP
+    expect(chooseCanvasShrinkFactor(10_000, 5_000)).toBe(2);
+    expect(chooseCanvasShrinkFactor(12_000, 12_000)).toBe(3);
     for (const [width, height] of [
       [7072, 7072],
       [50_000, 1000],
       [9000, 5555],
     ] as const) {
-      const factor = canvasShrinkFactor(width, height);
+      const factor = chooseCanvasShrinkFactor(width, height);
       expect(Math.ceil(width / factor) * Math.ceil(height / factor)).toBeLessThanOrEqual(MAX_CANVAS_PIXELS);
       expect(Math.ceil(width / (factor - 1)) * Math.ceil(height / (factor - 1))).toBeGreaterThan(MAX_CANVAS_PIXELS);
     }

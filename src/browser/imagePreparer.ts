@@ -91,7 +91,7 @@ export const shrinkPdfImage: ImageShrinker = async (source, maxEdge, quality) =>
 
 /** Draws gray or RGB samples onto a canvas, first shrinking images too big for one. */
 function pixelsToCanvas(source: PixelSource): HTMLCanvasElement {
-  const { width, height, rgba } = toRgbaPixels(source, canvasShrinkFactor(source.width, source.height));
+  const { width, height, rgba } = toRgbaPixels(source, chooseCanvasShrinkFactor(source.width, source.height));
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -102,7 +102,7 @@ function pixelsToCanvas(source: PixelSource): HTMLCanvasElement {
 }
 
 /** The smallest whole-number factor that shrinks an image enough to fit on a canvas. */
-export function canvasShrinkFactor(width: number, height: number): number {
+export function chooseCanvasShrinkFactor(width: number, height: number): number {
   let factor = 1;
   while (Math.ceil(width / factor) * Math.ceil(height / factor) > MAX_CANVAS_PIXELS) factor++;
   return factor;

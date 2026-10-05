@@ -13,10 +13,10 @@ export interface CardHandlers {
 
 const CARD_HELP_ID = 'card-help';
 
-export const cardFocusKey = (optionId: string) => `card:${optionId}`;
+export const makeCardFocusKey = (optionId: string) => `card:${optionId}`;
 
 /** How to move and remove cards, read out as each card's description rather than as part of its name. */
-export function cardHelp(): HTMLElement {
+export function createCardHelp(): HTMLElement {
   return h(
     'p',
     { id: CARD_HELP_ID, class: 'visually-hidden' },
@@ -43,7 +43,7 @@ export function packetCard(
   today: CalendarDate,
   handlers: CardHandlers,
 ): HTMLElement {
-  const focusKey = cardFocusKey(option.id);
+  const focusKey = makeCardFocusKey(option.id);
   let included: readonly LibraryDocument<unknown>[];
   let notIncluded: string[] = [];
   let control: HTMLElement | null = null;
