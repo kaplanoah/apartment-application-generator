@@ -75,13 +75,18 @@ describe('worker messages', () => {
     ).toBe(false);
     expect(isWorkerResponse({ type: 'seal-report', exposed: [] })).toBe(true);
     expect(isWorkerResponse({ type: 'error', message: 'x', details: [], expected: true })).toBe(true);
-    expect(isWorkerResponse({ type: 'shrink-image', id: 1, jpeg: new Uint8Array(), maxEdge: 1600, quality: 0.8 })).toBe(
-      true,
-    );
-    expect(
-      isWorkerResponse({ type: 'shrink-image', id: 1.5, jpeg: new Uint8Array(), maxEdge: 1600, quality: 0.8 }),
-    ).toBe(false);
-    expect(isWorkerResponse({ type: 'shrink-image', id: 1, jpeg: 'x', maxEdge: 1600, quality: 0.8 })).toBe(false);
+    const shrink = (source: unknown, id = 1) =>
+      isWorkerResponse({ type: 'shrink-image', id, source, maxEdge: 1600, quality: 0.8 });
+    expect(shrink({ kind: 'jpeg', bytes: new Uint8Array() })).toBe(true);
+    expect(shrink({ kind: 'jpeg', bytes: new Uint8Array() }, 1.5)).toBe(false);
+    expect(shrink({ kind: 'jpeg', bytes: 'x' })).toBe(false);
+    const pixels = { kind: 'pixels', bytes: new Uint8Array(2 * 3 * 3), width: 2, height: 3, channels: 3 };
+    expect(shrink(pixels)).toBe(true);
+    expect(shrink({ ...pixels, channels: 1 })).toBe(false); // byte count doesn't match the size
+    expect(shrink({ ...pixels, channels: 4, bytes: new Uint8Array(24) })).toBe(false);
+    expect(shrink({ ...pixels, width: 0, bytes: new Uint8Array() })).toBe(false);
+    expect(shrink({ ...pixels, width: 100_000, height: 100_000 })).toBe(false); // too big to draw
+    expect(shrink({ kind: 'svg', bytes: new Uint8Array() })).toBe(false);
     for (const bad of [
       null,
       'done',

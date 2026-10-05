@@ -1,8 +1,8 @@
 import { UserFacingError } from '../core/errors';
 import { extensionOf } from '../core/fileTypes';
 import type { SizePreset } from '../core/sizePresets';
-import { sniffImageFormat, tryUseAsIs, type ImagePreparer } from '../pdf/images';
-import type { JpegShrinker } from '../pdf/shrinkImages';
+import { tryUseAsIs, type ImagePreparer } from '../pdf/images';
+import type { ImageShrinker, ImageSource } from '../pdf/shrinkImages';
 
 const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   jpg: 'image/jpeg',
@@ -13,10 +13,14 @@ const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   webp: 'image/webp',
 };
 
+/** A PNG is swapped for a JPEG only when that's at most this fraction of its size. */
+const PNG_TO_JPEG_RATIO = 0.5;
+
 /**
  * Prepares photos for the PDF using the browser's own decoder, entirely in
  * memory. Photos already small enough are kept byte-for-byte; larger ones are
- * scaled down to the preset's limit. HEIC (iPhone) photos work in Safari.
+ * scaled down to the preset's limit. PNGs that are really photos or scans
+ * become JPEGs. HEIC (iPhone) photos work in Safari.
  */
 export function createImagePreparer(preset: SizePreset): ImagePreparer {
   return async (bytes, fileName) => {
@@ -25,17 +29,18 @@ export function createImagePreparer(preset: SizePreset): ImagePreparer {
     const image = await decode(bytes, fileName);
     try {
       const longEdge = Math.max(image.naturalWidth, image.naturalHeight);
-      const limit = preset.maxImageEdge;
-      if (asIs && longEdge <= limit) return asIs;
-      const redrawn = await redraw(
-        image.element,
-        image.naturalWidth,
-        image.naturalHeight,
-        Math.min(1, limit / longEdge),
-        asIs?.format === 'png' ? 'png' : 'jpg',
-        preset.jpegQuality,
-        fileName,
-      );
+      const scale = Math.min(1, preset.maxImageEdge / longEdge);
+      const draw = (format: 'jpg' | 'png') =>
+        redraw(image.element, image.naturalWidth, image.naturalHeight, scale, format, preset.jpegQuality, fileName);
+
+      if (asIs?.format === 'png') {
+        const png = scale < 1 ? await draw('png') : asIs;
+        const jpeg = await draw('jpg');
+        const chosen = jpeg.bytes.byteLength <= png.bytes.byteLength * PNG_TO_JPEG_RATIO ? jpeg : png;
+        return { bytes: chosen.bytes, format: chosen.format, turn: 0 };
+      }
+      if (asIs && scale === 1) return asIs;
+      const redrawn = await draw('jpg');
       return { bytes: redrawn.bytes, format: redrawn.format, turn: 0 };
     } finally {
       image.release();
@@ -44,30 +49,58 @@ export function createImagePreparer(preset: SizePreset): ImagePreparer {
 }
 
 /**
- * Re-encodes an oversized JPEG found inside a PDF, for the sealed worker. Returns null to keep
- * the original: when it can't be decoded, is already small enough, or isn't smaller as a JPEG.
+ * Re-encodes an image found inside a PDF as a smaller JPEG, for the sealed worker. Returns null
+ * to keep the original: when it can't be decoded, or a JPEG is already within the limit.
  */
-export const shrinkJpeg: JpegShrinker = async (jpeg, maxEdge, quality) => {
-  const image = await decode(jpeg, 'image.jpg').catch(() => null);
+export const shrinkPdfImage: ImageShrinker = async (source, maxEdge, quality) => {
+  if (source.kind === 'pixels') {
+    const { width, height } = source;
+    const canvas = pixelsToCanvas(source);
+    try {
+      const scale = Math.min(1, maxEdge / Math.max(width, height));
+      return await redraw(canvas, width, height, scale, 'jpg', quality, 'image');
+    } finally {
+      canvas.width = canvas.height = 0;
+    }
+  }
+  const image = await decode(source.bytes, 'image.jpg').catch(() => null);
   if (!image) return null;
   try {
     const longEdge = Math.max(image.naturalWidth, image.naturalHeight);
     if (longEdge <= maxEdge) return null;
-    const scale = maxEdge / longEdge;
-    const redrawn = await redraw(
+    return await redraw(
       image.element,
       image.naturalWidth,
       image.naturalHeight,
-      scale,
+      maxEdge / longEdge,
       'jpg',
       quality,
       'image',
     );
-    return sniffImageFormat(redrawn.bytes) === 'jpg' ? redrawn : null;
   } finally {
     image.release();
   }
 };
+
+/** Draws gray or RGB samples onto a canvas at full size. */
+function pixelsToCanvas(source: Extract<ImageSource, { kind: 'pixels' }>): HTMLCanvasElement {
+  const { width, height, channels, bytes } = source;
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  for (let pixel = 0, from = 0, to = 0; pixel < width * height; pixel++, from += channels, to += 4) {
+    const red = bytes[from] as number;
+    rgba[to] = red;
+    rgba[to + 1] = channels === 3 ? (bytes[from + 1] as number) : red;
+    rgba[to + 2] = channels === 3 ? (bytes[from + 2] as number) : red;
+    rgba[to + 3] = 255;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('No canvas');
+  context.putImageData(new ImageData(rgba, width, height), 0, 0);
+  return canvas;
+}
 
 interface DecodedImage {
   readonly element: HTMLImageElement;
