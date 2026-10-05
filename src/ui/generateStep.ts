@@ -1,8 +1,8 @@
 import { formatFileSize } from '../core/fileSize';
 import { planPacket } from '../core/packet';
-import { getSizePreset, SIZE_PRESETS, type SizePresetId } from '../core/sizePresets';
 import { generate, setSizePreset, type Services } from './actions';
 import { h, replaceChildren } from './dom';
+import { createSizeMenu } from './sizeMenu';
 import type { AppState, SizeReport } from './state';
 import { hasChanged, type Store } from './store';
 
@@ -15,21 +15,7 @@ const NOTABLE_SAVING_BYTES = 100_000;
 
 /** Step 4: pick a size and build the PDF. */
 export function createGenerateStep(store: Store<AppState>, services: Services) {
-  const sizeSelect = h('select', {
-    'aria-label': 'File size',
-    id: 'file-size',
-    'aria-describedby': 'file-size-description',
-  });
-  for (const preset of SIZE_PRESETS) sizeSelect.append(h('option', { value: preset.id }, preset.label));
-  sizeSelect.addEventListener('change', () => setSizePreset(store, sizeSelect.value as SizePresetId));
-  const sizeDescription = h('p', { class: 'faint', id: 'file-size-description' });
-  // Styled like the quiet "through Sep 30" choice on the order cards.
-  const sizeChoice = h(
-    'span',
-    { class: 'size-choice' },
-    h('label', { for: 'file-size' }, 'File size:'),
-    h('span', { class: 'select small' }, sizeSelect),
-  );
+  const sizeMenu = createSizeMenu((id) => setSizePreset(store, id));
   // While working, the button stays focusable (aria-disabled rather than
   // disabled, which would drop keyboard focus); generate() ignores clicks then.
   const button = h(
@@ -48,19 +34,14 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
     'section',
     { class: 'step', 'aria-labelledby': 'step-generate' },
     h('h2', { id: 'step-generate' }, h('span', { class: 'step-num' }, '4'), 'Generate'),
-    h(
-      'div',
-      { class: 'generate-row' },
-      h('div', { class: 'generate-summary' }, summary, sizeChoice, sizeDescription),
-      button,
-    ),
+    h('div', { class: 'generate-row' }, h('div', { class: 'generate-summary' }, summary, sizeMenu.element), button),
     result,
   );
 
   function update(state: AppState, previous?: AppState): void {
-    if (hasChanged(state, previous, 'sizePreset')) {
-      sizeSelect.value = state.sizePreset;
-      sizeDescription.textContent = getSizePreset(state.sizePreset).description;
+    if (hasChanged(state, previous, 'sizePreset', 'build')) {
+      // The size can't change partway through: the build uses the one it started with.
+      sizeMenu.update(state.sizePreset, state.build.status === 'working');
     }
     if (hasChanged(state, previous, 'folder', 'packet')) renderSummary(state);
     if (hasChanged(state, previous, 'build')) renderBuild(state);
@@ -73,7 +54,7 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
       ? 'Add your folder to get started.'
       : sections.length === 0
         ? 'Add at least one folder or file to the order.'
-        : `${sections.length} ${sections.length === 1 ? 'section' : 'sections'}, ${files} ${files === 1 ? 'file' : 'files'}, plus a cover page.`;
+        : `${sections.length} ${sections.length === 1 ? 'section' : 'sections'} with ${files} ${files === 1 ? 'file' : 'files'}`;
   }
 
   function renderBuild(state: AppState): void {
@@ -81,8 +62,6 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
     const working = build.status === 'working';
     button.setAttribute('aria-disabled', String(working));
     button.textContent = working ? 'Working…' : 'Generate PDF';
-    // The size can't change partway through: the build uses the one it started with.
-    sizeSelect.disabled = working;
     switch (build.status) {
       case 'idle':
         replaceChildren(result);
@@ -136,7 +115,7 @@ export function createGenerateStep(store: Store<AppState>, services: Services) {
   return { element, update };
 }
 
-/** The biggest sections, how much shrinking saved, and a note on starting with smaller files. */
+/** The biggest sections, and how much shrinking saved. */
 function sizeBreakdown(report: SizeReport): HTMLElement {
   return h(
     'div',
@@ -160,10 +139,5 @@ function sizeBreakdown(report: SizeReport): HTMLElement {
     ),
     report.sharedSaved >= NOTABLE_SAVING_BYTES &&
       h('p', null, `Repeated images and fonts are stored once, which saved ${formatFileSize(report.sharedSaved)}.`),
-    h(
-      'p',
-      { class: 'faint' },
-      'Good to know: scans made at 300 dpi, or with the iPhone Notes scanner, start out much smaller than 600 dpi scans or photos.',
-    ),
   );
 }

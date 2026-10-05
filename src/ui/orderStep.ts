@@ -109,7 +109,7 @@ export function createOrderStep(store: Store<AppState>) {
     if (!body.contains(pool)) {
       replaceChildren(
         body,
-        h('p', { class: 'hint' }, 'Drag items in order. Click to add it to the end.'),
+        h('p', { class: 'hint' }, 'Drag items into any order. Click to add to the bottom.'),
         pool,
         list,
         createCardHelp(),

@@ -215,6 +215,11 @@ async function chooseFolder(page: Page, folder: string) {
 const addTile = (page: Page, title: string) => page.getByRole('button', { name: `Add ${title}`, exact: true }).click();
 const card = (page: Page, title: string) =>
   page.locator('.row').filter({ has: page.locator('.card-title', { hasText: title }) });
+const chooseSize = async (page: Page, label: string) => {
+  await page.getByRole('button', { name: /^File size:/ }).click();
+  await page.getByRole('option', { name: label, exact: true }).click();
+  await expect(page.getByRole('button', { name: `File size: ${label}` })).toBeVisible();
+};
 
 test('says it is local-only and ships a strict no-network policy', async ({ page }) => {
   const { errors } = await openApp(page);
@@ -258,7 +263,7 @@ test('the PDF worker has no way to reach the network or storage', async ({ page 
   await openApp(page);
   await chooseFolder(page, photosFolder);
   await addTile(page, 'Scanned ID');
-  await page.getByLabel('File size').selectOption({ label: 'Smaller' });
+  await chooseSize(page, 'Smaller');
   const workerPromise = page.waitForEvent('worker');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Generate PDF' }).click();
@@ -385,7 +390,7 @@ test('photos become upright pages, and the size choice shrinks big photos', asyn
 
   const results: { bytes: number; pages: { width: number; height: number }[] }[] = [];
   for (const label of ['High', 'Smaller']) {
-    await page.getByLabel('File size').selectOption({ label });
+    await chooseSize(page, label);
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Generate PDF' }).click();
     const bytes = await readFile(await (await downloadPromise).path());
@@ -412,7 +417,7 @@ test('big photos inside PDFs, like scans, are shrunk too while the page stays th
 
   const sizes: number[] = [];
   for (const label of ['High', 'Smaller']) {
-    await page.getByLabel('File size').selectOption({ label });
+    await chooseSize(page, label);
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Generate PDF' }).click();
     const bytes = await readFile(await (await downloadPromise).path());
@@ -434,7 +439,7 @@ test('repeated images are stored once, and big packets say where the size comes 
   await addTile(page, 'Bank Statements');
   await card(page, 'Bank Statements').getByLabel('Bank Statements: what to include').selectOption('all');
   await addTile(page, 'ID');
-  await page.getByLabel('File size').selectOption({ label: 'High' });
+  await chooseSize(page, 'High');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Generate PDF' }).click();
   const bytes = await readFile(await (await downloadPromise).path());
@@ -446,14 +451,14 @@ test('repeated images are stored once, and big packets say where the size comes 
   await expect(report).toContainText(/Bank Statements: [\d.]+ MB → about [\d.]+ MB/);
   await expect(report).toContainText('ID:');
   await expect(report).toContainText('Repeated images and fonts are stored once, which saved');
-  await expect(report).toContainText('Good to know');
+  await expect(report).not.toContainText('Good to know');
 });
 
 test('losslessly stored pictures, in PDFs and PNG files, become much smaller JPEGs', async ({ page }) => {
   test.slow(); // builds two packets from large images
   await openApp(page);
   await chooseFolder(page, losslessFolder);
-  await page.getByLabel('File size').selectOption({ label: 'Smaller' });
+  await chooseSize(page, 'Smaller');
 
   for (const title of ['Exported ID', 'Screenshot']) {
     await addTile(page, title);
@@ -538,6 +543,46 @@ test('cards can be reordered and removed with the keyboard or by dragging back',
   await expect(titles).toHaveText(['Cover Letter']);
   await expect(page.getByRole('button', { name: 'Add ID', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add Pets', exact: true })).toBeVisible();
+});
+
+test('folder cards keep their file count a fixed distance from the corner, clear of the names', async ({ page }) => {
+  await openApp(page);
+  await chooseFolder(page, docsFolder);
+  for (const title of ['ID', 'Pay Stubs', 'Bank Statements']) await addTile(page, title);
+
+  for (const title of ['ID', 'Pay Stubs', 'Bank Statements']) {
+    const box = await card(page, title).locator('.card').boundingBox();
+    const count = await card(page, title).locator('.count').boundingBox();
+    expect(box && count).toBeTruthy();
+    if (!box || !count) return;
+    // 12px and 8px inside the 1px border.
+    expect(box.x + box.width - (count.x + count.width)).toBeCloseTo(13, 0);
+    expect(box.y + box.height - (count.y + count.height)).toBeCloseTo(9, 0);
+    for (const paths of await card(page, title).locator('.paths').all()) {
+      const text = await paths.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return Math.max(...Array.from(range.getClientRects(), (rect) => rect.right));
+      });
+      expect(text).toBeLessThan(count.x);
+    }
+  }
+});
+
+test('the file size menu opens and closes with clicks', async ({ page }) => {
+  await openApp(page);
+  const menuButton = page.getByRole('button', { name: 'File size: Balanced' });
+  const list = page.getByRole('listbox', { name: 'File size:' });
+
+  await menuButton.click();
+  await expect(list).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Balanced', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await menuButton.click();
+  await expect(list).toBeHidden();
+
+  await menuButton.click();
+  await page.getByRole('heading', { name: 'Generate' }).click();
+  await expect(list).toBeHidden();
 });
 
 test('explains the contact file format when it is missing', async ({ page }) => {

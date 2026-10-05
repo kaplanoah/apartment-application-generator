@@ -136,13 +136,78 @@ describe('folder step', () => {
   });
 });
 
+describe('order step', () => {
+  it('says how to order and add items', async () => {
+    await loadFolder(store, sampleFolder());
+    expect(find('.order-body .hint')?.textContent).toBe('Drag items into any order. Click to add to the bottom.');
+  });
+});
+
 describe('generate step', () => {
-  it('shows the chosen size’s description as text', () => {
-    const select = find('#file-size');
-    const description = document.getElementById(select?.getAttribute('aria-describedby') ?? '');
-    expect(description?.textContent).toMatch(/^Recommended\./);
+  const trigger = () => find('#file-size');
+  const listbox = () => find('[role="listbox"]');
+  const options = () => findAll('[role="option"]');
+  const accessibleText = (element: HTMLElement | null, attribute: string) =>
+    (element?.getAttribute(attribute) ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent)
+      .join(' ');
+
+  it('counts sections and files', async () => {
+    await loadFolder(store, sampleFolder());
+    tile('Cover Letter')?.click();
+    expect(find('#summary')?.textContent).toBe('1 section with 1 file');
+    tile('ID')?.click();
+    expect(find('#summary')?.textContent).toBe('2 sections with 2 files');
+  });
+
+  it('names the chosen size on its button, and lists every size with its explanation', () => {
+    expect(accessibleText(trigger(), 'aria-labelledby')).toBe('File size: Balanced');
+    expect(trigger()?.getAttribute('aria-haspopup')).toBe('listbox');
+    expect(listbox()?.hidden).toBe(true);
+
+    trigger()?.click();
+    expect(listbox()?.hidden).toBe(false);
+    expect(trigger()?.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(listbox());
+    expect(options().map((option) => accessibleText(option, 'aria-labelledby'))).toEqual([
+      'Smaller',
+      'Balanced',
+      'High',
+    ]);
+    expect(accessibleText(options()[0] ?? null, 'aria-describedby')).toMatch(/^For email and upload limits/);
+    expect(options().map((option) => option.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false']);
+  });
+
+  it('chooses with the arrow keys and Enter, then returns to the button', () => {
+    trigger()?.click();
+    expect(listbox()?.getAttribute('aria-activedescendant')).toBe('file-size-balanced');
+    pressKey(listbox(), 'ArrowDown');
+    expect(listbox()?.getAttribute('aria-activedescendant')).toBe('file-size-high');
+    pressKey(listbox(), 'Enter');
+    expect(store.get().sizePreset).toBe('high');
+    expect(trigger()?.textContent).toBe('High');
+    expect(listbox()?.hidden).toBe(true);
+    expect(document.activeElement).toBe(trigger());
+  });
+
+  it('chooses with a click, and Escape closes without changing anything', () => {
+    trigger()?.click();
+    options()[0]?.click();
+    expect(store.get().sizePreset).toBe('smaller');
+
+    trigger()?.click();
+    pressKey(listbox(), 'End');
+    pressKey(listbox(), 'Escape');
+    expect(store.get().sizePreset).toBe('smaller');
+    expect(listbox()?.hidden).toBe(true);
+    expect(document.activeElement).toBe(trigger());
+  });
+
+  it('shows a size chosen elsewhere', () => {
     setSizePreset(store, 'smaller');
-    expect(description?.textContent).toMatch(/^For email and upload limits/);
+    expect(trigger()?.textContent).toBe('Smaller');
+    expect(options().map((option) => option.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
   });
 
   it('keeps the button focusable while working, and announces errors once', () => {
@@ -152,7 +217,7 @@ describe('generate step', () => {
     expect(button?.hasAttribute('disabled')).toBe(false);
     expect(button?.getAttribute('aria-disabled')).toBe('true');
     expect(document.activeElement).toBe(button);
-    expect((find('#file-size') as HTMLSelectElement).disabled).toBe(true);
+    expect((find('#file-size') as HTMLButtonElement).disabled).toBe(true);
 
     store.update({ build: { status: 'error', message: 'Something went wrong.', details: [] } });
     expect(button?.getAttribute('aria-disabled')).toBe('false');
