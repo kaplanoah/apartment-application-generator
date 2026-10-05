@@ -18,7 +18,7 @@ export function readJpegOrientation(bytes: Uint8Array): number {
     const length = view.getUint16(offset + 2);
     if (length < 2 || offset + 2 + length > bytes.length) return 1;
     if (marker === 0xe1) {
-      const orientation = orientationFromApp1(view, offset + 4, length - 2);
+      const orientation = readOrientationFromApp1(view, offset + 4, length - 2);
       if (orientation) return orientation;
     }
     offset += 2 + length;
@@ -26,7 +26,7 @@ export function readJpegOrientation(bytes: Uint8Array): number {
   return 1;
 }
 
-function orientationFromApp1(view: DataView, start: number, length: number): number | null {
+function readOrientationFromApp1(view: DataView, start: number, length: number): number | null {
   const end = start + length;
   // "Exif\0\0"
   if (length < 14 || view.getUint32(start) !== 0x45786966 || view.getUint16(start + 4) !== 0) return null;
@@ -54,7 +54,7 @@ function orientationFromApp1(view: DataView, start: number, length: number): num
  * Clockwise turn needed to show the photo upright, or null for mirrored
  * orientations (2, 4, 5, 7), which have to be redrawn instead.
  */
-export function orientationToTurn(orientation: number): QuarterTurn | null {
+export function convertOrientationToTurn(orientation: number): QuarterTurn | null {
   switch (orientation) {
     case 1:
       return 0;
@@ -74,7 +74,7 @@ export function orientationToTurn(orientation: number): QuarterTurn | null {
  * viewers do, instead of applying the rotation tag. Returns the input unchanged if it has none
  * or isn't laid out as expected.
  */
-export function withoutExif(bytes: Uint8Array): Uint8Array {
+export function stripExif(bytes: Uint8Array): Uint8Array {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (bytes.length < 4 || view.getUint16(0) !== 0xffd8) return bytes;
 

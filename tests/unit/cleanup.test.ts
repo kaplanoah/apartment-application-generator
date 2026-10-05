@@ -1,8 +1,9 @@
-import { PDFDocument, PDFName, PDFRawStream, StandardFonts } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef, StandardFonts } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { buildPacket } from '../../src/pdf/buildPacket';
 import { cleanUpPacket } from '../../src/pdf/cleanup';
-import { sampleIdJpeg } from '../../scripts/lib/sampleDocs';
+import { addOutline } from '../../src/pdf/navigation';
+import { sampleIdJpeg, samplePdf } from '../../scripts/lib/sampleDocs';
 import { readPdf } from '../support/pdfText';
 
 const cover = { address: '', applicants: [], footerText: 'Footer', preparedOn: { year: 2026, month: 10, day: 4 } };
@@ -78,6 +79,50 @@ describe('cleanUpPacket', () => {
     expect(stream.dict.get(PDFName.of('Filter'))).toBe(PDFName.of('FlateDecode'));
     expect(stream.contents.byteLength).toBeLessThan(text.byteLength / 5);
     expect(saved).toBeGreaterThan(0);
+  });
+
+  it('merges a source’s Helvetica with the packet’s own, leaving every font reference valid', async () => {
+    const documents = await Promise.all(
+      ['Alex Sample', 'Jordan Sample'].map(async (name) => ({
+        label: `${name}.pdf`,
+        kind: 'pdf' as const,
+        bytes: await samplePdf(`Pay stub for ${name}`, ['Gross pay $2,400']),
+      })),
+    );
+    const note = { label: 'note.txt', kind: 'text' as const, bytes: new TextEncoder().encode('Helvetica too') };
+    const packet = await buildPacket(cover, [{ title: 'Pay', description: null, documents: [...documents, note] }]);
+
+    const out = await PDFDocument.load(packet.bytes);
+    const helveticas = out.context
+      .enumerateIndirectObjects()
+      .filter(
+        ([, object]) => object instanceof PDFDict && object.get(PDFName.of('BaseFont')) === PDFName.of('Helvetica'),
+      );
+    expect(helveticas).toHaveLength(1);
+    for (const page of out.getPages()) {
+      const fonts = page.node.Resources()?.lookup(PDFName.of('Font'), PDFDict);
+      for (const [, ref] of fonts?.entries() ?? []) {
+        expect(ref).toBeInstanceOf(PDFRef);
+        expect(out.context.lookup(ref)).toBeInstanceOf(PDFDict);
+      }
+    }
+    const pdf = await readPdf(packet.bytes);
+    expect(pdf.pages[1]).toContain('Pay stub for Alex Sample');
+    expect(pdf.pages[2]).toContain('Pay stub for Jordan Sample');
+    expect(pdf.pages[3]).toContain('Helvetica too');
+    expect(pdf.pages[3]).toContain('Page 4 of 4');
+  });
+
+  it('keeps the document info and bookmarks', async () => {
+    const doc = await PDFDocument.create();
+    doc.setTitle('Rental Application');
+    const page = doc.addPage();
+    addOutline(doc, [{ title: 'Pay Stubs', page }]);
+    cleanUpPacket(doc);
+
+    const pdf = await readPdf(await doc.save());
+    expect(pdf.title).toBe('Rental Application');
+    expect(pdf.outline).toEqual(['Pay Stubs']);
   });
 
   it('drops page thumbnails and anything left unreferenced', async () => {

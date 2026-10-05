@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { UserFacingError } from '../../src/core/errors';
-import { orientationToTurn, readJpegOrientation } from '../../src/pdf/exif';
+import { convertOrientationToTurn, readJpegOrientation, stripExif } from '../../src/pdf/exif';
 import { prepareImageAsIs, sniffImageFormat, tryUseAsIs } from '../../src/pdf/images';
+import { readJpegSize } from '../../src/pdf/jpegSize';
 import { sampleIdJpeg, samplePng, withExifOrientation } from '../../scripts/lib/sampleDocs';
+import { appSegment, jpegFromSegments, withJpegSize } from '../support/jpeg';
 
 describe('EXIF orientation', () => {
   const jpeg = sampleIdJpeg();
@@ -33,8 +35,51 @@ describe('EXIF orientation', () => {
   });
 
   it('maps orientations to clockwise turns, refusing mirrored ones', () => {
-    expect([1, 3, 6, 8].map(orientationToTurn)).toEqual([0, 180, 90, 270]);
-    expect([2, 4, 5, 7, 0, 9].map(orientationToTurn)).toEqual([null, null, null, null, null, null]);
+    expect([1, 3, 6, 8].map(convertOrientationToTurn)).toEqual([0, 180, 90, 270]);
+    expect([2, 4, 5, 7, 0, 9].map(convertOrientationToTurn)).toEqual([null, null, null, null, null, null]);
+  });
+});
+
+describe('removing EXIF', () => {
+  const jfif = appSegment(0xe0, 'JFIF\0');
+  const exif = appSegment(0xe1, 'Exif\0\0', 20);
+  const xmp = appSegment(0xe1, 'http://ns.adobe.com/xap/1.0/\0');
+  const imageData = sampleIdJpeg().subarray(2);
+
+  it('removes the EXIF block from between other segments and keeps XMP', () => {
+    const tagged = jpegFromSegments(jfif, exif, xmp, imageData);
+    expect(Buffer.from(stripExif(tagged)).equals(Buffer.from(jpegFromSegments(jfif, xmp, imageData)))).toBe(true);
+  });
+
+  it('returns a JPEG without EXIF unchanged', () => {
+    const plain = jpegFromSegments(jfif, xmp, imageData);
+    expect(stripExif(plain)).toBe(plain);
+  });
+});
+
+describe('JPEG size', () => {
+  it('reads the size and color components from the frame header', () => {
+    expect(readJpegSize(sampleIdJpeg())).toEqual({ width: 1000, height: 630, components: 3 });
+    expect(readJpegSize(withExifOrientation(sampleIdJpeg(), 6))).toEqual({ width: 1000, height: 630, components: 3 });
+    expect(readJpegSize(withJpegSize(sampleIdJpeg(), 60_000, 40_000))).toMatchObject({ width: 60_000, height: 40_000 });
+  });
+
+  it('gives null for anything it can’t read, without throwing', () => {
+    const jpeg = sampleIdJpeg();
+    const inputs = [
+      new Uint8Array(),
+      new Uint8Array([0xff, 0xd8]),
+      new Uint8Array([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x05, 0x08, 0x00]), // header cut short
+      withJpegSize(jpeg, 1000, 0), // height given later in the file
+      jpeg.slice(0, 20),
+      samplePng(2, 2, [0, 0, 0]),
+    ];
+    for (const input of inputs) expect(readJpegSize(input)).toBeNull();
+    for (let i = 2; i < 200; i++) {
+      const copy = jpeg.slice();
+      copy[i] = 0xff;
+      expect(() => readJpegSize(copy)).not.toThrow();
+    }
   });
 });
 

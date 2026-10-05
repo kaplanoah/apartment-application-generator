@@ -1,6 +1,5 @@
-import { PDFArray, PDFDict, PDFName, PDFRef, PDFStream, type PDFDocument, type PDFObject, type PDFPage } from 'pdf-lib';
-
-const PARENT = PDFName.of('Parent');
+import type { PDFDocument, PDFPage, PDFRef } from 'pdf-lib';
+import { walkReferences } from './objectGraph';
 
 /**
  * Roughly how many bytes each group of pages takes up in the packet: everything
@@ -9,43 +8,34 @@ const PARENT = PDFName.of('Parent');
  */
 export function measurePageGroups(doc: PDFDocument, groups: readonly (readonly PDFPage[])[]): number[] {
   // Links and bookmarks point at other pages; following them would count those pages too.
-  const pageTree = new Set<string>();
+  const pageTree = new Set<PDFRef>();
   for (const page of doc.getPages()) {
-    pageTree.add(page.ref.tag);
+    pageTree.add(page.ref);
     for (let node = page.node.Parent(); node; node = node.Parent()) {
       const ref = doc.context.getObjectRef(node);
-      if (!ref || pageTree.has(ref.tag)) break;
-      pageTree.add(ref.tag);
+      if (!ref || pageTree.has(ref)) break;
+      pageTree.add(ref);
     }
   }
 
-  const counted = new Set<string>();
+  const counted = new Set<PDFRef>();
   return groups.map((pages) => {
     let bytes = 0;
-    const pending: PDFObject[] = [];
-    for (const page of pages) {
-      if (counted.has(page.ref.tag)) continue;
-      counted.add(page.ref.tag);
+    const roots = pages.filter((page) => !counted.has(page.ref));
+    for (const page of roots) {
+      counted.add(page.ref);
       bytes += page.node.sizeInBytes();
-      pending.push(page.node);
     }
-    while (pending.length > 0) {
-      const object = pending.pop() as PDFObject;
-      if (object instanceof PDFRef) {
-        if (counted.has(object.tag) || pageTree.has(object.tag)) continue;
-        counted.add(object.tag);
-        const target = doc.context.lookup(object);
-        if (!target) continue;
-        bytes += target.sizeInBytes();
-        pending.push(target);
-      } else if (object instanceof PDFStream) {
-        pending.push(object.dict);
-      } else if (object instanceof PDFDict) {
-        for (const [key, value] of object.entries()) if (key !== PARENT) pending.push(value);
-      } else if (object instanceof PDFArray) {
-        for (let i = 0; i < object.size(); i++) pending.push(object.get(i));
-      }
-    }
+    walkReferences(
+      doc.context,
+      roots.map((page) => page.node),
+      (ref) => {
+        if (counted.has(ref) || pageTree.has(ref)) return false;
+        counted.add(ref);
+        bytes += doc.context.lookup(ref)?.sizeInBytes() ?? 0;
+        return true;
+      },
+    );
     return bytes;
   });
 }

@@ -1,5 +1,5 @@
 import { degrees, rgb, type PDFDocument, type PDFFont } from 'pdf-lib';
-import { normalizeQuarterTurn, visibleSize, visibleToPage } from './geometry';
+import { mapVisiblePointToPage, measureVisibleSize, normalizeQuarterTurn } from './geometry';
 import { fitText } from './text';
 
 const SIZE = 7.5;
@@ -16,13 +16,13 @@ export function stampFooters(doc: PDFDocument, font: PDFFont, footerText: string
   pages.forEach((page, index) => {
     const box = page.getCropBox();
     const rotation = normalizeQuarterTurn(page.getRotation().angle);
-    const visible = visibleSize(box, rotation);
+    const visible = measureVisibleSize(box, rotation);
     const margin = Math.min(36, visible.width * 0.06);
 
     const label = `Page ${index + 1} of ${pages.length}`;
     const labelWidth = font.widthOfTextAtSize(label, SIZE);
-    const draw = (text: string, vx: number) => {
-      const spot = visibleToPage(box, rotation, vx, BASELINE);
+    const draw = (text: string, visibleX: number) => {
+      const spot = mapVisiblePointToPage(box, rotation, visibleX, BASELINE);
       page.drawText(text, { x: spot.x, y: spot.y, rotate: degrees(spot.rotate), size: SIZE, font, color: COLOR });
     };
 

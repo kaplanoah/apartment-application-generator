@@ -6,12 +6,13 @@ import { measurePageGroups } from './measure';
 import { drawCover, planCover, type ContentsEntry, type CoverDetails } from './cover';
 import { CONTENTS_SPAN } from './coverLayout';
 import { stampFooters } from './footer';
-import { fitImage, pageSizeForImage } from './geometry';
+import { choosePageSizeForImage, fitImage } from './geometry';
 import type { PreparedImage } from './images';
 import { addOutline, addPageLink } from './navigation';
+import { detachPageLinks, reattachPageLinks } from './pageLinks';
 import { shrinkPdfImages, type ImageLimits } from './shrinkImages';
 import { makeTextSanitizer } from './text';
-import { drawTextPages, paginate, TEXT_LAYOUT, wrapText } from './textPages';
+import { decodeText, drawTextPages, layoutTextPages } from './textPages';
 
 export interface PacketDocument {
   /** Shown in error messages, e.g. "Pay Stubs/Alex/2026-09-18.pdf". */
@@ -48,11 +49,19 @@ export interface BuildOptions {
 const IMAGE_MARGIN = 36;
 const PRODUCER = 'Apartment Packet Builder';
 const MAX_TEXT_BYTES = 512 * 1024;
+const ONE_FILE_FAILED = 'One file couldn’t be added.';
 
-type LoadedDocument =
+type LoadedDocument = { readonly label: string } & (
   | { readonly kind: 'pdf'; readonly pdf: PDFDocument; readonly pageCount: number }
   | { readonly kind: 'image'; readonly bytes: Uint8Array; readonly image: Omit<PreparedImage, 'bytes'> }
-  | { readonly kind: 'text'; readonly pages: readonly string[][] };
+  | { readonly kind: 'text'; readonly pages: readonly string[][] }
+);
+
+const UNREADABLE: Readonly<Record<LoadedDocument['kind'], string>> = {
+  pdf: 'it couldn’t be read as a PDF. Try opening it in Preview and exporting it again.',
+  image: 'the photo couldn’t be read. Try opening it in Preview and exporting it again as a JPEG.',
+  text: 'the text couldn’t be laid out. Try saving it as a PDF instead.',
+};
 
 interface Fonts {
   readonly regular: PDFFont;
@@ -64,8 +73,9 @@ interface Fonts {
  * Assembles the packet: cover with contents, then every section's pages in
  * order, with links, bookmarks and a footer on every page.
  *
- * All source files are checked before anything is built, so one bad file
- * produces a single error listing every problem at once.
+ * All source files are checked before anything is built, so a single error
+ * lists every problem at once. A file that still fails while it's being added
+ * stops the build with an error naming it.
  */
 export async function buildPacket(
   cover: CoverDetails,
@@ -97,7 +107,7 @@ export async function buildPacket(
   }
   if (problems.length > 0) {
     throw new UserFacingError(
-      problems.length === 1 ? 'One file couldn’t be added.' : `${problems.length} files couldn’t be added.`,
+      problems.length === 1 ? ONE_FILE_FAILED : `${problems.length} files couldn’t be added.`,
       problems,
     );
   }
@@ -106,31 +116,20 @@ export async function buildPacket(
   let nextPage = layout.pageCount + 1;
   const entries: ContentsEntry[] = sections.map((section, i) => {
     const entry = { title: section.title, description: section.description, pageNumber: nextPage };
-    nextPage += (loaded[i] ?? []).reduce((sum, item) => sum + pagesOf(item), 0);
+    nextPage += (loaded[i] ?? []).reduce((sum, item) => sum + countPages(item), 0);
     return entry;
   });
   const { entryRows } = drawCover(doc, layout, cover, entries, fonts);
 
-  const sectionStarts: PDFPage[] = [];
   const sectionPages: PDFPage[][] = [];
   for (const items of loaded) {
     const start = doc.getPageCount();
-    let first: PDFPage | undefined;
-    for (const item of items) {
-      const added =
-        item.kind === 'pdf'
-          ? await appendPdf(doc, item.pdf)
-          : item.kind === 'text'
-            ? drawTextPages(doc, regular, item.pages)
-            : await appendImage(doc, item);
-      first ??= added;
-    }
-    if (first) sectionStarts.push(first);
+    for (const item of items) await appendDocument(doc, item, regular);
     sectionPages.push(doc.getPages().slice(start));
   }
 
   entryRows.forEach((row, i) => {
-    const target = sectionStarts[i];
+    const target = sectionPages[i]?.[0];
     if (target) {
       const rect = {
         x: CONTENTS_SPAN.left - 2,
@@ -144,7 +143,7 @@ export async function buildPacket(
   addOutline(
     doc,
     sections.flatMap((section, i) => {
-      const page = sectionStarts[i];
+      const page = sectionPages[i]?.[0];
       return page ? [{ title: section.title, page }] : [];
     }),
   );
@@ -158,7 +157,7 @@ export async function buildPacket(
   return { bytes, pageCount: doc.getPageCount(), sectionBytes, cleanupSavings };
 }
 
-const pagesOf = (item: LoadedDocument): number =>
+const countPages = (item: LoadedDocument): number =>
   item.kind === 'pdf' ? item.pageCount : item.kind === 'text' ? item.pages.length : 1;
 
 async function loadDocument(
@@ -166,10 +165,11 @@ async function loadDocument(
   fonts: Fonts,
   imageLimits: ImageLimits | undefined,
 ): Promise<LoadedDocument | string> {
-  if (document.kind === 'text') return loadText(document.bytes, fonts);
+  const { label } = document;
+  if (document.kind === 'text') return loadText(label, document.bytes, fonts);
   if (document.kind === 'image') {
     if (!document.image) return 'the photo wasn’t prepared.';
-    return { kind: 'image', bytes: document.bytes, image: document.image };
+    return { kind: 'image', label, bytes: document.bytes, image: document.image };
   }
   let pdf: PDFDocument;
   try {
@@ -177,40 +177,53 @@ async function loadDocument(
     // (pdf-lib's error classes don't survive `instanceof`).
     pdf = await PDFDocument.load(document.bytes, { updateMetadata: false, ignoreEncryption: true });
   } catch {
-    return 'it couldn’t be read as a PDF. Try opening it in Preview and exporting it again.';
+    return UNREADABLE.pdf;
   }
   if (pdf.isEncrypted) {
     return 'it’s password-protected. Open it in Preview, choose File → Export as PDF, and use the exported copy.';
   }
+  try {
+    // Reads what the packet needs from every page, which throws if the page tree is broken.
+    for (const page of pdf.getPages()) {
+      page.getCropBox();
+      page.getRotation();
+    }
+    detachPageLinks(pdf);
+  } catch {
+    return UNREADABLE.pdf;
+  }
   const pageCount = pdf.getPageCount();
   if (pageCount === 0) return 'the PDF has no pages.';
   if (imageLimits) await shrinkPdfImages(pdf, imageLimits);
-  return { kind: 'pdf', pdf, pageCount };
+  return { kind: 'pdf', label, pdf, pageCount };
 }
 
-function loadText(bytes: Uint8Array, fonts: Fonts): LoadedDocument | string {
+function loadText(label: string, bytes: Uint8Array, fonts: Fonts): LoadedDocument | string {
   if (bytes.byteLength > MAX_TEXT_BYTES) return 'the text file is too long for the packet. Save it as a PDF instead.';
-  // Sanitize line by line: the sanitizer flattens line breaks.
-  const text = new TextDecoder('utf-8')
-    .decode(bytes)
-    .split(/\r\n|\r|\n/)
-    .map((line) => fonts.sanitize(line.replace(/\t/g, '    ')))
-    .join('\n')
-    .trim();
-  if (!text) return 'the text file is empty.';
-  const width = 612 - TEXT_LAYOUT.margin * 2;
-  return { kind: 'text', pages: paginate(wrapText(text, fonts.regular, TEXT_LAYOUT.size, width)) };
+  const pages = layoutTextPages(decodeText(bytes), fonts.regular, fonts.sanitize);
+  if (pages.length === 0) return 'the text file is empty.';
+  return { kind: 'text', label, pages };
 }
 
-async function appendPdf(doc: PDFDocument, source: PDFDocument): Promise<PDFPage> {
+async function appendDocument(doc: PDFDocument, item: LoadedDocument, font: PDFFont): Promise<void> {
+  try {
+    if (item.kind === 'pdf') await appendPdf(doc, item.pdf);
+    else if (item.kind === 'text') drawTextPages(doc, font, item.pages);
+    else await appendImage(doc, item);
+  } catch {
+    throw new UserFacingError(ONE_FILE_FAILED, [`${item.label}: ${UNREADABLE[item.kind]}`]);
+  }
+}
+
+async function appendPdf(doc: PDFDocument, source: PDFDocument): Promise<void> {
   const pages = await doc.copyPages(source, source.getPageIndices());
   pages.forEach((page) => doc.addPage(page));
-  return pages[0] as PDFPage;
+  reattachPageLinks(pages);
 }
 
-async function appendImage(doc: PDFDocument, item: Extract<LoadedDocument, { kind: 'image' }>): Promise<PDFPage> {
+async function appendImage(doc: PDFDocument, item: Extract<LoadedDocument, { kind: 'image' }>): Promise<void> {
   const image = item.image.format === 'jpg' ? await doc.embedJpg(item.bytes) : await doc.embedPng(item.bytes);
-  const size = pageSizeForImage(image.width, image.height, item.image.turn);
+  const size = choosePageSizeForImage(image.width, image.height, item.image.turn);
   const page = doc.addPage([size.width, size.height]);
   const area = {
     x: IMAGE_MARGIN,
@@ -226,5 +239,4 @@ async function appendImage(doc: PDFDocument, item: Extract<LoadedDocument, { kin
     height: spot.height,
     rotate: degrees(spot.rotate),
   });
-  return page;
 }

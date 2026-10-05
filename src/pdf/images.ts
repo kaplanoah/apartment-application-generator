@@ -1,5 +1,5 @@
 import { UserFacingError } from '../core/errors';
-import { orientationToTurn, readJpegOrientation } from './exif';
+import { convertOrientationToTurn, readJpegOrientation } from './exif';
 import type { QuarterTurn } from './geometry';
 
 export type EmbeddableFormat = 'jpg' | 'png';
@@ -33,7 +33,7 @@ export function tryUseAsIs(bytes: Uint8Array): PreparedImage | null {
   const format = sniffImageFormat(bytes);
   if (format === 'png') return { bytes, format, turn: 0 };
   if (format === 'jpg') {
-    const turn = orientationToTurn(readJpegOrientation(bytes));
+    const turn = convertOrientationToTurn(readJpegOrientation(bytes));
     return turn === null ? null : { bytes, format, turn };
   }
   return null;

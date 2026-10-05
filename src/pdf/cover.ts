@@ -3,7 +3,7 @@ import { formatLongMonthYear, type CalendarDate } from '../core/calendar';
 import { formatContactDetail, type Applicant } from '../core/contactInfo';
 import { CONTENTS_SPAN, COVER, layoutCover, type CoverLayout } from './coverLayout';
 import { LETTER } from './geometry';
-import { fitText } from './text';
+import { fitText, INK } from './text';
 
 export interface CoverDetails {
   readonly address: string;
@@ -25,7 +25,6 @@ export interface CoverFonts {
   readonly sanitize: (text: string) => string;
 }
 
-const INK = rgb(0.11, 0.13, 0.19);
 const LINE = rgb(0.85, 0.86, 0.89); // dot leaders
 
 export function planCover(details: CoverDetails, entryCount: number): CoverLayout {
@@ -45,7 +44,7 @@ export function drawCover(
   fonts: CoverFonts,
 ): { pages: PDFPage[]; entryRows: { page: PDFPage; y: number }[] } {
   const pages = Array.from({ length: layout.pageCount }, () => doc.addPage([LETTER.width, LETTER.height]));
-  const pageAt = (index: number): PDFPage => pages[index] as PDFPage;
+  const getPage = (index: number): PDFPage => pages[index] as PDFPage;
   const { regular, bold, sanitize } = fonts;
   const write = (
     page: PDFPage,
@@ -58,7 +57,7 @@ export function drawCover(
     color = INK,
   ) => page.drawText(fitText(sanitize(text), font, size, maxWidth), { x, y, size, font, color });
 
-  const first = pageAt(0);
+  const first = getPage(0);
   // With an address: a small "Rental application for" above the address in
   // large type. Without one, "Rental Application" is the headline.
   if (layout.address) {
@@ -96,7 +95,7 @@ export function drawCover(
   details.applicants.forEach((applicant, i) => {
     const spot = layout.applicants[i];
     if (!spot) return;
-    const page = pageAt(spot.page);
+    const page = getPage(spot.page);
     write(page, applicant.name, spot.x, spot.y, COVER.nameSize, bold, columnWidth);
     applicant.details.forEach((detail, line) => {
       const y = spot.y - COVER.nameLeading - line * COVER.detailLeading + 2;
@@ -106,7 +105,7 @@ export function drawCover(
 
   layout.headings.forEach((heading, i) => {
     write(
-      pageAt(heading.page),
+      getPage(heading.page),
       i === 0 ? 'CONTENTS' : 'CONTENTS (CONTINUED)',
       heading.x,
       heading.y,
@@ -119,7 +118,7 @@ export function drawCover(
   const right = CONTENTS_SPAN.right;
   const entryRows = entries.map((entry, i) => {
     const spot = layout.entries[i] as (typeof layout.entries)[number];
-    const page = pageAt(spot.page);
+    const page = getPage(spot.page);
     const pageLabel = String(entry.pageNumber);
     const pageWidth = regular.widthOfTextAtSize(pageLabel, COVER.entrySize);
     const textX = spot.x;
