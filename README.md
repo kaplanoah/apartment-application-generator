@@ -1,5 +1,8 @@
 # Apartment Packet Builder
 
+[![CI](https://github.com/kaplanoah/apartment-application-generator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kaplanoah/apartment-application-generator/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/kaplanoah/apartment-application-generator)](https://github.com/kaplanoah/apartment-application-generator/releases/latest)
+
 Turn one folder of rental-application documents into a single, tidy PDF for each
 apartment: pick what that landlord asks for, put it in order, and get a packet with a
 cover page, a linked table of contents and a footer on every page.
@@ -26,11 +29,10 @@ connects to the internet, and your documents are never transferred or stored. Se
 
 ### 1. Get the app
 
-Download `apartment-packet-builder.html` from the
-[Releases page](../../releases) and keep it anywhere, such as your Documents folder.
-
-> No release yet? Ask someone who uses Node.js to run `npm ci && npm run build` and send
-> you `dist/index.html`, or follow [For developers](#for-developers).
+Download [`apartment-packet-builder.html`](https://github.com/kaplanoah/apartment-application-generator/releases/latest/download/apartment-packet-builder.html)
+from the [latest release](https://github.com/kaplanoah/apartment-application-generator/releases/latest) and keep it anywhere, such as your
+Documents folder. Want to try it first? `apartment-packet-builder.zip` on the same page
+also has the fake example folder.
 
 ### 2. Set up your documents folder
 
@@ -202,6 +204,20 @@ side; the single `check` job passes only when all of them do, so require it befo
 Pull requests are also reviewed by Claude for bugs, privacy and security issues, and rule
 violations. To turn that on in your copy, add a `CLAUDE_CODE_OAUTH_TOKEN` (or
 `ANTHROPIC_API_KEY`) repository secret; without one, the review step is skipped.
+
+### Releasing
+
+Versions follow [semantic versioning](https://semver.org). To publish one, merge a pull
+request that sets the new `version` in `package.json` (`npm version 1.1.0
+--no-git-tag-version`), then tag that commit on `main` and push the tag:
+
+```sh
+git tag v1.1.0 && git push origin v1.1.0
+```
+
+The Release workflow checks the tag matches `package.json`, runs every check, builds the
+app and publishes `apartment-packet-builder.html`, a zip with the example folder and their
+checksums on the Releases page. The README's download link always points at the latest one.
 
 ## License
 
