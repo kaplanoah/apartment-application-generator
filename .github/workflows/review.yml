@@ -80,7 +80,7 @@ jobs:
         if: steps.decision.outputs.review == 'true'
         continue-on-error: true
         timeout-minutes: 8
-        uses: anthropics/claude-code-action@fd1c128679612beff4ca259c78021c506e8aa7a7 # v1.0.237
+        uses: anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13 # v1.0.262
         with: &review-inputs
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -137,7 +137,7 @@ jobs:
         id: retry
         if: steps.review.outcome == 'failure'
         timeout-minutes: 8
-        uses: anthropics/claude-code-action@fd1c128679612beff4ca259c78021c506e8aa7a7 # v1.0.237
+        uses: anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13 # v1.0.262
         with: *review-inputs
 
       # The review action can stop early and still succeed, for example when this pull
